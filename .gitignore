@@ -1,0 +1,8 @@
+.vscode
+*.json
+*.npz
+*.pkl
+
+not_calibrated/*
+
+oscilloscopio.ipynb
