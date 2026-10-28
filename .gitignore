@@ -2,6 +2,7 @@
 *.json
 *.npz
 *.pkl
+*test.C
 
 not_calibrated/*
 
