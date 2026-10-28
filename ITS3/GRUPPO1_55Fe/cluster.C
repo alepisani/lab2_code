@@ -120,7 +120,21 @@ void cluster() {
     h_cluster->GetXaxis()->SetBinLabel(5, "4"); 
 
     TCanvas *c3 = new TCanvas("c3", "Signal vs Cluster Size", 800, 600);
-    TH2D *h_signal_cluster = new TH2D("h_signal_cluster", "Signal vs Cluster Size;Numero di pixel accesi;Segnale [mV]", 5, -0.5, 4.5, 100, -10, 200);
+    TH2D *h_signal_cluster = new TH2D("h_signal_cluster", "Signal vs Cluster Size;Numero di pixel accesi;Segnale [mV]", 5, -0.5, 4.5, 100, 0, 175);
+
+    //histogrammi per vedere segnale totale in funzione del numero di pixel accesi (cluster size)
+    TCanvas *c4 = new TCanvas("c4", "Signal vs Cluster Size (1D)", 800, 600);
+    TCanvas *c5 = new TCanvas("c5", "Signal vs Cluster Size (1D)", 800, 600);
+    TCanvas *c6 = new TCanvas("c6", "Signal vs Cluster Size (1D)", 800, 600);
+    TCanvas *c7 = new TCanvas("c7", "Signal vs Cluster Size (1D)", 800, 600);
+    TH1D *h_signal_cluster_1 = new TH1D("h_signal_cluster_1", "Segnale per cluster size = 1;Segnale [mV];Numero di eventi", 100, 0, 175);
+    TH1D *h_signal_cluster_2 = new TH1D("h_signal_cluster_2", "Segnale per cluster size = 2;Segnale [mV];Numero di eventi", 100, 0, 175);
+    TH1D *h_signal_cluster_3 = new TH1D("h_signal_cluster_3", "Segnale per cluster size = 3;Segnale [mV];Numero di eventi", 100, 0, 175);
+    TH1D *h_signal_cluster_4 = new TH1D("h_signal_cluster_4", "Segnale per cluster size = 4;Segnale [mV];Numero di eventi", 100, 0, 175);
+    
+
+    
+
     
     std::vector<int> cluster_sizes; // per memorizzare le dimensioni dei cluster
     for (Long64_t ev = 0; ev < nEntries; ev++) {
@@ -136,7 +150,16 @@ void cluster() {
                 pixel_accesi_in_questo_evento++;
                 total_signal += signal[i];
 
-                
+                // riempio gli histogrammi per ogni dimensione di cluster
+                if (pixel_accesi_in_questo_evento == 1) {
+                    h_signal_cluster_1->Fill(signal[i]);
+                } else if (pixel_accesi_in_questo_evento == 2) {
+                    h_signal_cluster_2->Fill(signal[i]);
+                } else if (pixel_accesi_in_questo_evento == 3) {
+                    h_signal_cluster_3->Fill(signal[i]);
+                } else if (pixel_accesi_in_questo_evento == 4) {
+                    h_signal_cluster_4->Fill(signal[i]);
+                }
             }
         }
         
@@ -162,5 +185,25 @@ void cluster() {
     h_signal_cluster->Draw("COLZ");
     c3->Modified();
     c3->Update();
+
+    c4->cd();
+    h_signal_cluster_1->Draw();
+    c4->Modified();
+    c4->Update();
+
+    c5->cd();
+    h_signal_cluster_2->Draw();
+    c5->Modified();
+    c5->Update();
+
+    c6->cd();
+    h_signal_cluster_3->Draw();
+    c6->Modified();
+    c6->Update();
+
+    c7->cd();
+    h_signal_cluster_4->Draw();
+    c7->Modified();
+    c7->Update();      
 
 }
