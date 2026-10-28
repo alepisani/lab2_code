@@ -12,7 +12,7 @@
 
 using namespace std;
 
-void energy_calib()
+void energy_calib(int RebinFactor=46)
 {
     TFile *inputfile = TFile::Open("data.root");
     TCanvas *c1 = new TCanvas("c1", "Scope Signals", 1600, 1200);
@@ -26,8 +26,6 @@ void energy_calib()
     double minBin = 1.0;
     double maxBin = 91.0;
 
-    int RebinFactor = 50;
-
     const int p[4] = {5,6,9,10};
     double signal[4];
     
@@ -39,7 +37,7 @@ void energy_calib()
     {
         histo_signal[i] = new TH1D(Form("Pixel %d", i), Form("Pixel %d", p[i]), Nbins, minBin-0.005, maxBin+0.005);
         histo_signal[i]->Rebin(RebinFactor);
-        histo_signal[i]->GetXaxis()->SetTitle("V [mV]");
+        histo_signal[i]->GetXaxis()->SetTitle("Signal [mV]");
         histo_signal[i]->GetYaxis()->SetTitle("Counts");
         histo_signal[i]->SetLineColor(kBlack);
         histo_signal[i]->SetLineWidth(2);
@@ -97,11 +95,13 @@ void energy_calib()
         TF1 *fit_ka = new TF1(Form("fit_ka_%d", i), "gaus", xmin_ka[i], xmax_ka[i]);
         fit_ka->SetParameters(Norm_ka[i], mu_ka[i], sigma_ka[i]);
         fit_ka->SetLineColor(kRed);
+        fit_ka->SetLineWidth(2);
         histo_signal[i]->Fit(fit_ka, "RQ+");
 
         TF1 *fit_kb = new TF1(Form("fit_kb_%d", i), "gaus", xmin_kb[i], xmax_kb[i]);
         fit_kb->SetParameters(Norm_kb[i], mu_kb[i], sigma_kb[i]);
         fit_kb->SetLineColor(kBlue);
+        fit_kb->SetLineWidth(2);
         histo_signal[i]->Fit(fit_kb, "RQ+");
 
         y_calib[i][0] = fit_ka->GetParameter(1);
@@ -116,6 +116,13 @@ void energy_calib()
         cout << "  - Kb: " << fit_kb->GetParameter(1) << " +/- " << fit_kb->GetParameter(2) << endl;
         cout << "        norm: " << fit_kb->GetParameter(0) << endl;
         cout << "        p-value: " << fit_kb->GetProb() << endl;
+
+        TLegend *leg = new TLegend(0.12, 0.73, 0.37, 0.88);
+        leg->AddEntry(fit_ka, "K_{#alpha}", "l");
+        leg->AddEntry(fit_kb, "K_{#beta}", "l");
+        leg->SetBorderSize(0);
+        leg->SetTextSize(0.05);
+        leg->Draw();
         
     }
 
@@ -125,7 +132,10 @@ void energy_calib()
     TGraphErrors *gr[4];
     TF1 *fit_calib[4];
 
-    int color[4] = {kRed, kBlue, kGreen+2, kOrange+7};
+    TLegend *leg_calib = new TLegend(0.12, 0.73, 0.37, 0.88);
+    leg_calib->SetBorderSize(0);
+
+    int color[4] = {kRed, kBlue, kGreen+2, kOrange};
     for(int i=0; i<4; i++)
     {
         gr[i] = new TGraphErrors(2, x_calib, y_calib[i], nullptr, y_calib_err[i]);
@@ -133,30 +143,100 @@ void energy_calib()
         gr[i]->SetLineColor(color[i]);
         gr[i]->SetMarkerStyle(20);
 
-        fit_calib[i] = new TF1(Form("fit_calib_%d", i), "[0]*x", 0, 7);
+        fit_calib[i] = new TF1(Form("fit_calib_%d", i), "[0]*x", -0.2, 6.6);
         fit_calib[i]->SetLineColor(color[i]);
-        gr[i]->Fit(fit_calib[i], "RQ0");   // "0": non disegna la funzione durante il fit
+        gr[i]->Fit(fit_calib[i], "RQ0");
 
         cout << "Pixel " << p[i] << ": " << endl;
         cout << "  - Calibration: " << fit_calib[i]->GetParameter(0) << " +/- " << fit_calib[i]->GetParError(0) << endl;
         cout << "        p-value: " << fit_calib[i]->GetProb() << endl;
 
+        leg_calib->AddEntry(gr[i], Form("Pixel %d", p[i]), "ple");
+
         mg->Add(gr[i]);
     }
 
-    mg->SetTitle("Energy Calibration;Energy (keV);Signal (mV)");
+    TGraph *gr_origin = new TGraph(1);
+    gr_origin->SetPoint(0, 0, 0);
+    gr_origin->SetMarkerStyle(20);
+    gr_origin->SetMarkerSize(1.2);
+    gr_origin->SetMarkerColor(kBlack);
+    
+    mg->SetTitle("Energy Calibration;Energy [keV];Signal [mV]");
     mg->Draw("AP");
 
-    mg->GetXaxis()->SetLimits(-0.5, 7);
+    leg_calib->Draw();
+
+    mg->GetXaxis()->SetLimits(-0.5, 6.7);
     mg->SetMinimum(-5);
     mg->SetMaximum(90);
 
     for(int i=0; i<4; i++)
         fit_calib[i]->Draw("same");
 
+    gr_origin->Draw("P same");
+
     c3->Modified();
     c3->Update();
 
-    inputfile->Close();
+    TCanvas *c4 = new TCanvas("c4", "Energy Calibration Zoom", 1600, 1200);
+    TMultiGraph *mg_zoom = (TMultiGraph*)mg->Clone("mg_zoom");
+    mg_zoom->SetTitle("Energy Calibration Zoom;Energy [keV];Signal [mV]");
+    mg_zoom->Draw("AP");
+    for(int i=0; i<4; i++)
+        fit_calib[i]->Draw("same");   
+    mg_zoom->GetXaxis()->SetLimits(5.8, 6.6);
+    mg_zoom->SetMinimum(71);
+    mg_zoom->SetMaximum(87);
+    leg_calib->Draw();
 
+// ---------- Istogrammi in keV ----------
+    const int    NbinsE = Nbins;
+    const double Emin = (minBin-0.005)/fit_calib[0]->GetParameter(0);
+    const double Emax = (maxBin+0.005)/fit_calib[0]->GetParameter(0);
+
+    double slope[4];
+    TH1D *histo_energy[4];
+    TH1D *histo_energy_all = new TH1D("h_energy_all", "Energy Spectru;Energy [keV];Counts", NbinsE, Emin, Emax);
+    histo_energy_all->SetDirectory(0);
+    histo_energy_all->SetLineColor(kBlack);
+    histo_energy_all->SetLineWidth(2);
+    histo_energy_all->Rebin(RebinFactor);
+
+    for(int i=0; i<4; i++)
+    {
+        slope[i] = fit_calib[i]->GetParameter(0);
+
+        histo_energy[i] = new TH1D(Form("h_energy_%d", i), Form("Pixel %d;Energy [keV];Counts", p[i]), NbinsE, Emin, Emax);
+        histo_energy[i]->SetDirectory(0);
+        histo_energy[i]->SetLineColor(kBlack);
+        histo_energy[i]->SetLineWidth(2);
+        histo_energy[i]->Rebin(RebinFactor);
+    }
+
+    for(int k=0; k<Nevents; k++)
+    {
+        for(int j=0; j<4; j++)
+        {
+            inputTree[j]->GetEntry(k);
+            double E = signal[j] / slope[j];
+            histo_energy[j]->Fill(E);
+            histo_energy_all->Fill(E);
+        }
+    }
+
+    // Canvas con i 4 pixel separati
+    TCanvas *c5 = new TCanvas("c5", "Energy Spectra", 1600, 1200);
+    c5->Divide(2, 2);
+    for(int i=0; i<4; i++)
+    {
+        c5->cd(i+1);
+        histo_energy[i]->Draw();
+    }
+
+    // Canvas con tutti i pixel sommati
+    TCanvas *c6 = new TCanvas("c6", "Energy Spectrum - All Pixels", 1600, 1200);
+    histo_energy_all->Draw();
+
+    inputfile->Close();
 }
