@@ -54,14 +54,8 @@ void cluster() {
     }
 
     // Assumiamo che tutti i tree abbiano lo stesso numero di entry (eventi)
-    // Prendiamo come riferimento il primo albero valido trovato
-    Long64_t nEntries = 0;
-    for (int i = 0; i < 4; i++) {
-        if (input_pixels[i]) {
-            nEntries = input_pixels[i]->GetEntries();
-            break;
-        }
-    }
+    // Prendiamo come riferimento il primo albero
+    Long64_t nEntries = input_pixels[0]->GetEntries();
 
     std::cout << "Numero totale di eventi da analizzare: " << nEntries << std::endl;
 
@@ -89,10 +83,6 @@ void cluster() {
             }
         }
 
-        // Qui puoi aggiungere la logica per il controllo dei cluster (es. se pixel_accesi_in_questo_evento > 1)
-        if (pixel_accesi_in_questo_evento > 1) {
-            // Evento con cluster maggiore di 1!
-        }
     }
     
     // 5. Disegno della mappa finale
@@ -106,10 +96,8 @@ void cluster() {
     c1->Update();
 
 
-    //-----------------------------------------------------
-    //controllo se ci sono eventi in cui si sono accesi più di un pixel (cluster)
-    int cluster_count = 0;
-    
+    //---------------------------------------------------------------------------------------------------------------------------------------------
+
     // creazione istogramma per contare quanti eventi hanno registrato un cluster e quanti pixel si sono accesi in quell'evento
     TCanvas *c2 = new TCanvas("c2", "Cluster Count", 800, 600);
     TH1D *h_cluster = new TH1D("h_cluster", "Numero di pixel accesi per evento;Numero di pixel accesi;Numero di eventi", 5, -0.5, 4.5);
@@ -119,8 +107,12 @@ void cluster() {
     h_cluster->GetXaxis()->SetBinLabel(4, "3");
     h_cluster->GetXaxis()->SetBinLabel(5, "4"); 
 
-    TCanvas *c3 = new TCanvas("c3", "Signal vs Cluster Size", 800, 600);
-    TH2D *h_signal_cluster = new TH2D("h_signal_cluster", "Signal vs Cluster Size;Numero di pixel accesi;Segnale [mV]", 5, -0.5, 4.5, 100, 0, 175);
+    TCanvas *c3 = new TCanvas("c3", "Cluster vs Size Signal", 800, 600);
+    TH2D *h_signal_cluster = new TH2D("h_signal_cluster", "Cluster Size vs Signal;Segnale [mV];Numero di pixel accesi;", 100, 0, 100, 4, 0.5, 4.5);
+    h_signal_cluster->GetYaxis()->SetBinLabel(1, "1");
+    h_signal_cluster->GetYaxis()->SetBinLabel(2, "2");
+    h_signal_cluster->GetYaxis()->SetBinLabel(3, "3");
+    h_signal_cluster->GetYaxis()->SetBinLabel(4, "4");
 
     //histogrammi per vedere segnale totale in funzione del numero di pixel accesi (cluster size)
     TCanvas *c4 = new TCanvas("c4", "Signal vs Cluster Size (1D)", 800, 600);
@@ -133,48 +125,76 @@ void cluster() {
     TH1D *h_signal_cluster_4 = new TH1D("h_signal_cluster_4", "Segnale per cluster size = 4;Segnale [mV];Numero di eventi", 100, 0, 100);
     
 
+    int no_events = 0; 
+    int one_pixel_on = 0;
+    int two_pixels_on = 0;
+    int three_pixels_on = 0;
+    int four_pixels_on = 0;
     
-
-    
-    std::vector<int> cluster_sizes; // per memorizzare le dimensioni dei cluster
     for (Long64_t ev = 0; ev < nEntries; ev++) {
         int pixel_accesi_in_questo_evento = 0;  
         double total_signal = 0.; 
 
+
+        // --- PASSO 1: Conta quanti pixel si sono accesi in questo evento ---
         for (int i = 0; i < 4; i++) {
             if (!input_pixels[i]) continue;
             
-
-            input_pixels[i]->GetEntry(ev);
+            input_pixels[i]->GetEntry(ev); // Legge l'evento
+            
             if (baseline[i] != -999.) {
                 pixel_accesi_in_questo_evento++;
                 total_signal += signal[i];
+            }
+        }
+        
+        // Riempie gli istogrammi generali dell'evento
+        h_cluster->Fill(pixel_accesi_in_questo_evento);
 
-                // riempio gli histogrammi per ogni dimensione di cluster
+        if(pixel_accesi_in_questo_evento > 0)h_signal_cluster->Fill(total_signal, pixel_accesi_in_questo_evento);
+        
+        if(!pixel_accesi_in_questo_evento) no_events++;
+        if(pixel_accesi_in_questo_evento == 1) one_pixel_on++;
+        if(pixel_accesi_in_questo_evento == 2) two_pixels_on++;
+        if(pixel_accesi_in_questo_evento == 3) three_pixels_on++;
+        if(pixel_accesi_in_questo_evento == 4) four_pixels_on++;
+
+
+        // --- PASSO 2: Rileggi i pixel e riempi l'istogramma 1D con il *singolo* segnale ---
+        // (Lo facciamo solo se l'evento ha una dimensione di cluster valida)
+        for (int i = 0; i < 4; i++) {
+            if (!input_pixels[i]) continue;
+            
+            input_pixels[i]->GetEntry(ev); // Rileggiamo lo stesso evento in modo sicuro
+            
+            if (baseline[i] != -999.) {
+                // Ora sappiamo con certezza qual è la dimensione totale del cluster (pixel_accesi_in_questo_evento)
+                // e prendiamo esattamente il signal[i] di questo specifico pixel.
+                
                 if (pixel_accesi_in_questo_evento == 1) {
                     h_signal_cluster_1->Fill(signal[i]);
-                } else if (pixel_accesi_in_questo_evento == 2) {
+                } 
+                else if (pixel_accesi_in_questo_evento == 2) {
                     h_signal_cluster_2->Fill(signal[i]);
-                } else if (pixel_accesi_in_questo_evento == 3) {
+                } 
+                else if (pixel_accesi_in_questo_evento == 3) {
                     h_signal_cluster_3->Fill(signal[i]);
-                } else if (pixel_accesi_in_questo_evento == 4) {
+                } 
+                else if (pixel_accesi_in_questo_evento == 4) {
                     h_signal_cluster_4->Fill(signal[i]);
                 }
             }
         }
-        
-        //considero la somma dei segnali dei pixel accesi in questo evento come il segnale totale del cluster
-        h_signal_cluster->Fill(pixel_accesi_in_questo_evento, total_signal);
-        h_cluster->Fill(pixel_accesi_in_questo_evento);
-
-        if (pixel_accesi_in_questo_evento > 1) {
-            cluster_count++;
-            //std::cout << "Evento " << ev << " ha un cluster con " << pixel_accesi_in_questo_evento << " pixel accesi." << std::endl;
-        }
-
     }
 
-    std::cout << "Numero di eventi con cluster: " << cluster_count << std::endl;
+    int cluster_count = one_pixel_on + two_pixels_on + three_pixels_on + four_pixels_on;
+    
+    std::cout << "Numero di eventi con un solo pixel acceso: " << one_pixel_on << std::endl;
+    std::cout << "Numero di eventi con due pixel accesi: " << two_pixels_on << std::endl;
+    std::cout << "Numero di eventi con tre pixel accesi: " << three_pixels_on << std::endl;
+    std::cout << "Numero di eventi con quattro pixel accesi: " << four_pixels_on << std::endl;
+    std::cout << "Numero di eventi senza cluster: " << no_events << std::endl;
+    std::cout << "Numero di eventi con cluster: " <<  cluster_count << std::endl;
     
     c2->cd();
     h_cluster->Draw();
