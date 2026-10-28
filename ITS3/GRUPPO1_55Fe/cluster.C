@@ -127,10 +127,10 @@ void cluster() {
     TCanvas *c5 = new TCanvas("c5", "Signal vs Cluster Size (1D)", 800, 600);
     TCanvas *c6 = new TCanvas("c6", "Signal vs Cluster Size (1D)", 800, 600);
     TCanvas *c7 = new TCanvas("c7", "Signal vs Cluster Size (1D)", 800, 600);
-    TH1D *h_signal_cluster_1 = new TH1D("h_signal_cluster_1", "Segnale per cluster size = 1;Segnale [mV];Numero di eventi", 100, 0, 175);
-    TH1D *h_signal_cluster_2 = new TH1D("h_signal_cluster_2", "Segnale per cluster size = 2;Segnale [mV];Numero di eventi", 100, 0, 175);
-    TH1D *h_signal_cluster_3 = new TH1D("h_signal_cluster_3", "Segnale per cluster size = 3;Segnale [mV];Numero di eventi", 100, 0, 175);
-    TH1D *h_signal_cluster_4 = new TH1D("h_signal_cluster_4", "Segnale per cluster size = 4;Segnale [mV];Numero di eventi", 100, 0, 175);
+    TH1D *h_signal_cluster_1 = new TH1D("h_signal_cluster_1", "Segnale per cluster size = 1;Segnale [mV];Numero di eventi", 100, 0, 100);
+    TH1D *h_signal_cluster_2 = new TH1D("h_signal_cluster_2", "Segnale per cluster size = 2;Segnale [mV];Numero di eventi", 100, 0, 100);
+    TH1D *h_signal_cluster_3 = new TH1D("h_signal_cluster_3", "Segnale per cluster size = 3;Segnale [mV];Numero di eventi", 100, 0, 100);
+    TH1D *h_signal_cluster_4 = new TH1D("h_signal_cluster_4", "Segnale per cluster size = 4;Segnale [mV];Numero di eventi", 100, 0, 100);
     
 
     
@@ -206,4 +206,31 @@ void cluster() {
     c7->Modified();
     c7->Update();      
 
+    //plot di sovrapposizione dei segnali dei cluster in funzione della dimensione del cluster
+    TCanvas *c8 = new TCanvas("c8", "Segnale vs Dimensione del Cluster", 800, 600);
+    //normalizzo gli istogrammi per poterli confrontare meglio
+    h_signal_cluster_1->Scale(1.0 / h_signal_cluster_1->Integral());
+    h_signal_cluster_2->Scale(1.0 / h_signal_cluster_2->Integral());
+    h_signal_cluster_3->Scale(1.0 / h_signal_cluster_3->Integral());
+    h_signal_cluster_4->Scale(1.0 / h_signal_cluster_4->Integral());
+
+    h_signal_cluster_1->SetLineColor(kRed);
+    h_signal_cluster_2->SetLineColor(kGreen);
+    h_signal_cluster_3->SetLineColor(kBlue);
+    h_signal_cluster_4->SetLineColor(kBlack);
+
+    h_signal_cluster_1->Draw("HIST");
+    h_signal_cluster_2->Draw("HIST SAME");
+    h_signal_cluster_3->Draw("HIST SAME");
+    h_signal_cluster_4->Draw("HIST SAME");
+
+    TLegend *legend = new TLegend(0.7, 0.7, 0.9, 0.9);
+    legend->AddEntry(h_signal_cluster_1, "1 Pixel", "l");
+    legend->AddEntry(h_signal_cluster_2, "2 Pixels", "l");
+    legend->AddEntry(h_signal_cluster_3, "3 Pixels", "l");
+    legend->AddEntry(h_signal_cluster_4, "4 Pixels", "l");
+    legend->Draw();
+
+    c8->Modified();
+    c8->Update();
 }
