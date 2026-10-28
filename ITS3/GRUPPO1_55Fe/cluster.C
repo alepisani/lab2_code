@@ -1,7 +1,9 @@
 #include <TFile.h>
 #include <TTree.h>
 #include <TCanvas.h>
+#include <TH1D.h>
 #include <TH2D.h>
+#include <TLegend.h>
 #include <TStyle.h>
 #include <TString.h>
 #include <iostream>
@@ -253,4 +255,68 @@ void cluster() {
 
     c8->Modified();
     c8->Update();
+
+
+    //----------------------------------------------------------------------------------------------------------------------------------------------
+
+    //esploriamo gli altri pixel 0,1,2,3,4,7,8,11,12,13,14,15
+    //p2p è il segnale di ampiezza ADC
+    //voglio mettere su un unico canvas tutti i p2p dei pixel in plot diversi.
+
+    const int pixel[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
+    double p2p[12] = {};
+    std::vector<TTree*> p2p_trees(12, nullptr);
+    std::vector<TH1D*> h_p2p(12, nullptr);
+
+    for (int i = 0; i < 12; i++) {
+        TString treename = TString::Format("pixel%d", pixel[i]);
+        p2p_trees[i] = (TTree*)inputfile->Get(treename);
+
+        p2p_trees[i]->SetBranchAddress("p2p", &p2p[i]);
+
+    }
+
+    TCanvas *c9 = new TCanvas("c9", "P2P Signals", 1200, 800);
+    c9->Divide(4, 4);
+    for (int i = 0; i < 12; i++) {
+        c9->cd(pixel[i] + 1);
+        h_p2p[i] = new TH1D(TString::Format("h_p2p_pixel%d", pixel[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", pixel[i]), 40, 2, 8.5);
+        h_p2p[i]->SetDirectory(nullptr);
+
+        if (p2p_trees[i] && p2p_trees[i]->GetBranch("p2p")) {
+            for (Long64_t ev = 0; ev < p2p_trees[i]->GetEntries(); ev++) {
+                p2p_trees[i]->GetEntry(ev);
+                h_p2p[i]->Fill(p2p[i]);
+            }
+        }
+        h_p2p[i]->Draw();
+    }
+    //riempiamo i canvas con i plot con i signal dei pixel 5,6,9,10
+    for (int i = 0; i < 4; i++){
+        c9->cd(p[i] + 1);
+        h_p2p[i] = new TH1D(TString::Format("h_p2p_pixel%d", p[i]), TString::Format("Pixel %d;signal [SCOPE];Numero di eventi", p[i]), 100, 0, 100);
+        h_p2p[i]->SetDirectory(nullptr);
+
+        if (input_pixels[i] && input_pixels[i]->GetBranch("signal")) {
+            for (Long64_t ev = 0; ev < input_pixels[i]->GetEntries(); ev++) {
+                input_pixels[i]->GetEntry(ev);
+                
+                input_pixels[i]->GetBranch("baseline")->GetEntry(ev); // Legge la baseline per verificare se il pixel è acceso
+                if (baseline[i] != -999.) h_p2p[i]->Fill(signal[i]);
+            }
+        }
+        h_p2p[i]->Draw();
+
+    }
+
+    /**
+     * vorrei studiare correlazione tra eventi con range definito di p2p e vedere correlazione tra cluster size nei 
+     * pixel 5,6,9,10. inoltre studiare correlazione tra range definito in p2p e valori osservati in signal nel pixel centrali
+     */
+
+    //dividiamo p2p in 3 range (0-4, 4-5.5, 5.5-8) e vediamo correlazione con cluster size nei pixel 5,6,9,10
+    
+
+
+
 }
