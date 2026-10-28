@@ -42,7 +42,6 @@ void energy_calib()
             histograms[j]->Fill(signal_scope[j]);
     }
 
-
     for(int i = 0; i < 4; i++) 
     {
         c1->cd(i + 1);
