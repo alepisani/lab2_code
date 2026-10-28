@@ -31,9 +31,10 @@ void energy_calib()
 
     int pixels[4] = {5, 6, 9, 10}; // Pixels to analyze
 
-    // Capire come scegliere il binning
+    
+    double pixres = 0.625;
     for(int i = 0; i < 4; i++) 
-        histograms[i] = new TH1D(Form("histogram_%d", pixels[i]), Form("Segnale pixel %d", pixels[i]), 256, 0.1, 100);
+        histograms[i] = new TH1D(Form("histogram_%d", pixels[i]), Form("Segnale pixel %d", pixels[i]), 160, -0.5*pixres, 100+0.5*pixres);
 
     for (int i = 0; i < Neventi; i++) 
     {
