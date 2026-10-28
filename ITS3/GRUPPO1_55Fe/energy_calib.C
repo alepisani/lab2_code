@@ -197,7 +197,7 @@ void energy_calib(int RebinFactor=46)
 
     double slope[4];
     TH1D *histo_energy[4];
-    TH1D *histo_energy_all = new TH1D("h_energy_all", "Energy Spectrum;Energy [keV];Counts", NbinsE, Emin, Emax);
+    TH1D *histo_energy_all = new TH1D("h_energy_all", "Energy Spectru;Energy [keV];Counts", NbinsE, Emin, Emax);
     histo_energy_all->SetDirectory(0);
     histo_energy_all->SetLineColor(kBlack);
     histo_energy_all->SetLineWidth(2);

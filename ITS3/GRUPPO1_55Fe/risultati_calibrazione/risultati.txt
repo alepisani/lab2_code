@@ -1,0 +1,86 @@
+Pixel 5: 
+    Gauss Ka
+        Chi2                      =      9.21914
+        NDf                       =            8      
+        Constant                  =      120.102   +/-   6.89976     
+        Mean                      =      73.8206   +/-   0.0436297   
+        Sigma                     =     0.874972   +/-   0.0415579
+        P-value                   =     0.324149
+    Gauss Kb
+        Chi2                      =       16.643
+        NDf                       =            9
+        Constant                  =      13.6751   +/-   2.54104     
+        Mean                      =      80.8191   +/-   0.103526    
+        Sigma                     =     0.772386   +/-   0.103828
+        P-value                   =    0.0546091
+    Calibration
+        Chi2                      =     0.134255
+        NDf                       =            1
+        p0                        =      12.4802   +/-   0.0928498   
+        P-value                   =     0.714061    
+
+
+Pixel 6:
+    Gauss Ka
+        Chi2                      =      12.8257
+        NDf                       =            8
+        Constant                  =      120.312   +/-   6.74232     
+        Mean                      =      73.5576   +/-   0.0430698   
+        Sigma                     =     0.887842   +/-   0.0385716
+        P-value                   =     0.117991
+    Gauss Kb
+        Chi2                      =      7.32147
+        NDf                       =            8
+        Constant                  =      11.1777   +/-   2.11857     
+        Mean                      =      80.5432   +/-   0.150165    
+        Sigma                     =       1.0095   +/-   0.153482
+        P-value                   =     0.502379
+    Calibration
+        Chi2                      =    0.0975252
+        NDf                       =            1
+        p0                        =      12.4452   +/-   0.108201    
+        P-value                   =      0.75482
+
+
+Pixel 9:
+    Gauss Ka
+        Chi2                      =      4.64527
+        NDf                       =            6
+        Constant                  =      111.321   +/-   6.15694     
+        Mean                      =       76.251   +/-   0.0647792   
+        Sigma                     =     0.942911   +/-   0.0517626
+        P-value                   =     0.590045
+    Gauss Kb
+        Chi2                      =      5.63383
+        NDf                       =            8
+        Constant                  =      13.7939   +/-   2.08421     
+        Mean                      =      83.4088   +/-   0.121716    
+        Sigma                     =      1.00138   +/-   0.105826
+        P-value                   =     0.688172
+    Calibration
+        Chi2                      =      0.13933
+        NDf                       =            1
+        p0                        =      12.8919   +/-   0.111049    
+        P-value                   =     0.708948
+
+
+Pixel 10:
+    Gauss Ka
+        Chi2                      =      6.79737
+        NDf                       =            7
+        Constant                  =      109.767   +/-   6.06688     
+        Mean                      =       77.158   +/-   0.0507739   
+        Sigma                     =      0.95613   +/-   0.0428566
+        P-value                   =     0.450279
+    Gauss Kb
+        Chi2                      =       5.6186
+        NDf                       =            8
+        Constant                  =      11.4376   +/-   1.8364      
+        Mean                      =      84.2072   +/-   0.206176    
+        Sigma                     =      1.44561   +/-   0.257564
+        P-value                   =     0.689868
+    Calibration
+        Chi2                      =     0.170571
+        NDf                       =            1
+        p0                        =      13.0493   +/-   0.131116  
+        P-value                   =     0.679605
