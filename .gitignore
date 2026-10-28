@@ -2,6 +2,9 @@
 *.json
 *.npz
 *.pkl
+*.pcm
+*.d
+*.so
 *test.C
 
 not_calibrated/*
