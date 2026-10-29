@@ -209,6 +209,7 @@ void cluster() {
                 // Ora sappiamo con certezza qual è la dimensione totale del cluster (pixel_accesi_in_questo_evento)
                 // e prendiamo esattamente il signal[i] di questo specifico pixel.
                 
+                /*
                 if (pixel_accesi_in_questo_evento == 1) {
                     h_signal_cluster_1->Fill(signal[i]);
                 } 
@@ -221,7 +222,14 @@ void cluster() {
                 else if (pixel_accesi_in_questo_evento == 4) {
                     h_signal_cluster_4->Fill(signal[i]);
                 }
-            }
+                */
+               // --- Segnale totale (somma dei pixel accesi) in funzione del cluster size ---
+                if (pixel_accesi_in_questo_evento == 1)      h_signal_cluster_1->Fill(total_signal);
+                else if (pixel_accesi_in_questo_evento == 2) h_signal_cluster_2->Fill(total_signal);
+                else if (pixel_accesi_in_questo_evento == 3) h_signal_cluster_3->Fill(total_signal);
+                else if (pixel_accesi_in_questo_evento == 4) h_signal_cluster_4->Fill(total_signal);
+            }   // fine ciclo sugli eventi
+            
         }
     }
 
@@ -286,6 +294,16 @@ void cluster() {
     h_signal_cluster_3->SetLineColor(kBlue);
     h_signal_cluster_4->SetLineColor(kBlack);
 
+    // massimo tra tutti gli istogrammi normalizzati
+    double ymax = 0.;
+    for (TH1D *histogram : signal_histograms) {
+        if (histogram->GetMaximum() > ymax) ymax = histogram->GetMaximum();
+    }
+
+    // l'istogramma disegnato per primo definisce gli assi: gli do il massimo globale + 15% di margine
+    h_signal_cluster_1->SetMaximum(1.15 * ymax);
+    h_signal_cluster_1->SetMinimum(0.);
+
     h_signal_cluster_1->Draw("HIST");
     h_signal_cluster_2->Draw("HIST SAME");
     h_signal_cluster_3->Draw("HIST SAME");
@@ -304,6 +322,7 @@ void cluster() {
 
     //----------------------------------------------------------------------------------------------------------------------------------------------
 
+    /*
 
     const int ext[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
     const int cen[4]  = {5, 6, 9, 10};
@@ -418,10 +437,11 @@ void cluster() {
     c9->Update();
     for (int r = 0; r < nR; r++) cR[r]->Update();
 
+    */
 
     //------------------------------------------------------------------------------------------------------------------------------
 
-        // =====================================================================
+    // =====================================================================
     // Distribuzioni di signal (pixel interni) e p2p (pixel esterni)
     // in funzione del cluster size (numero di pixel interni accesi)
     // =====================================================================
