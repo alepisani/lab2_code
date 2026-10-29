@@ -12,7 +12,7 @@
 using namespace std;
 
 void cluster() {
-    TFile *inputfile = TFile::Open("data.root", "READ");
+    TFile *inputfile = TFile::Open("data.root", "UPDATE");
     if (!inputfile || inputfile->IsZombie()) {
         std::cerr << "Errore nell'apertura del file!" << std::endl;
         return;
@@ -115,6 +115,21 @@ void cluster() {
 
     //---------------------------------------------------------------------------------------------------------------------------------------------
 
+    //aggiungo cluster a data.root
+    inputfile->cd();   // il tree viene associato al file
+    TTree *t_cluster = new TTree("cluster", "Cluster dei pixel interni");
+
+    Int_t    b_size = 0;                 // numero di pixel accesi (cluster size)
+    Double_t b_totsig = 0.;              // segnale totale del cluster
+    Int_t    b_on[4] = {0, 0, 0, 0};     // 1 se il pixel p[i] e' acceso
+    Double_t b_sig[4] = {0., 0., 0., 0.};// segnale del singolo pixel (0 se spento)
+
+    t_cluster->Branch("cluster_size", &b_size,   "cluster_size/I");
+    t_cluster->Branch("total_signal", &b_totsig, "total_signal/D");
+    t_cluster->Branch("pixel_on",     b_on,      "pixel_on[4]/I");
+    t_cluster->Branch("pixel_signal", b_sig,     "pixel_signal[4]/D");
+    
+
     // creazione istogramma per contare quanti eventi hanno registrato un cluster e quanti pixel si sono accesi in quell'evento
     TCanvas *c2 = new TCanvas("c2", "Cluster Count", 800, 600);
     TH1D *h_cluster = new TH1D("h_cluster", "Numero di pixel accesi per evento;Numero di pixel accesi;Numero di eventi", 5, -0.5, 4.5);
@@ -149,21 +164,27 @@ void cluster() {
     int four_pixels_on = 0;
     
     for (Long64_t ev = 0; ev < nEntries; ev++) {
-        int pixel_accesi_in_questo_evento = 0;  
-        double total_signal = 0.; 
+        int pixel_accesi_in_questo_evento = 0;
+        double total_signal = 0.;
 
+        for (int i = 0; i < 4; i++) { b_on[i] = 0; b_sig[i] = 0.; }
 
-        // --- PASSO 1: Conta quanti pixel si sono accesi in questo evento ---
         for (int i = 0; i < 4; i++) {
             if (!input_pixels[i]) continue;
-            
-            input_pixels[i]->GetEntry(ev); // Legge l'evento
-            
+            input_pixels[i]->GetEntry(ev);
+
             if (baseline[i] != -999.) {
                 pixel_accesi_in_questo_evento++;
                 total_signal += signal[i];
+                b_on[i]  = 1;
+                b_sig[i] = signal[i];
             }
         }
+
+        // riempimento del nuovo tree
+        b_size   = pixel_accesi_in_questo_evento;
+        b_totsig = total_signal;
+        t_cluster->Fill();
         
         // Riempie gli istogrammi generali dell'evento
         h_cluster->Fill(pixel_accesi_in_questo_evento);
@@ -203,6 +224,9 @@ void cluster() {
             }
         }
     }
+
+    inputfile->cd();
+    t_cluster->Write("", TObject::kOverwrite);   // sovrascrive se rilanci la macro
 
     int cluster_count = one_pixel_on + two_pixels_on + three_pixels_on + four_pixels_on;
     
@@ -280,129 +304,6 @@ void cluster() {
 
     //----------------------------------------------------------------------------------------------------------------------------------------------
 
-    /*
-    //esploriamo gli altri pixel 0,1,2,3,4,7,8,11,12,13,14,15
-    //p2p è il segnale di ampiezza ADC
-    //voglio mettere su un unico canvas tutti i p2p dei pixel in plot diversi.
-
-    const int pixel[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
-    double p2p[12] = {};
-    std::vector<TTree*> p2p_trees(12, nullptr);
-    std::vector<TH1D*> h_p2p(12, nullptr);
-    std::vector<TH1D*> h_p2p_range1(12, nullptr);
-    std::vector<TH1D*> h_p2p_range2(12, nullptr);
-    std::vector<TH1D*> h_p2p_range3(12, nullptr);
-
-    for (int i = 0; i < 12; i++) {
-        TString treename = TString::Format("pixel%d", pixel[i]);
-        p2p_trees[i] = (TTree*)inputfile->Get(treename);
-
-        if (p2p_trees[i] && p2p_trees[i]->GetBranch("p2p")) {
-            p2p_trees[i]->SetBranchAddress("p2p", &p2p[i]);
-        } else {
-            std::cerr << "Attenzione: impossibile trovare il tree o il branch p2p di "
-                      << treename << std::endl;
-            p2p_trees[i] = nullptr;
-        }
-
-    }
-
-    TCanvas *c9 = new TCanvas("c9", "P2P Signals", 1200, 800);
-    c9->Divide(4, 4);
-    TCanvas *c10 = new TCanvas("c10", "P2P Signals - Range 1", 1200, 800);
-    c10->Divide(4, 4);
-    TCanvas *c11 = new TCanvas("c11", "P2P Signals - Range 2", 1200, 800);
-    c11->Divide(4, 4);
-    TCanvas *c12 = new TCanvas("c12", "P2P Signals - Range 3", 1200, 800);
-    c12->Divide(4, 4);
-
-    double ref_p2p = 0;
-
-    //pixel esterni
-    for (int i = 0; i < 12; i++) {
-        c9->cd(pixel[i] + 1);
-        h_p2p[i] = new TH1D(TString::Format("h_p2p_pixel%d", pixel[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", pixel[i]), 40, 2, 8.5);
-        h_p2p[i]->SetDirectory(nullptr);
-        h_p2p_range1[i] = new TH1D(TString::Format("h_p2p_range1_pixel%d", pixel[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", pixel[i]), 40, 2, 8.5);
-        h_p2p_range1[i]->SetDirectory(nullptr);
-        h_p2p_range2[i] = new TH1D(TString::Format("h_p2p_range2_pixel%d", pixel[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", pixel[i]), 40, 2, 8.5);
-        h_p2p_range2[i]->SetDirectory(nullptr);
-        h_p2p_range3[i] = new TH1D(TString::Format("h_p2p_range3_pixel%d", pixel[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", pixel[i]), 40, 2, 8.5);
-        h_p2p_range3[i]->SetDirectory(nullptr);
-
-        if (p2p_trees[i] && p2p_trees[i]->GetBranch("p2p")) {
-            for (Long64_t ev = 0; ev < p2p_trees[i]->GetEntries(); ev++) {
-                p2p_trees[i]->GetEntry(ev);
-                h_p2p[i]->Fill(p2p[i]);
-                if (p2p[i] >= 0 && p2p[i] < 4) {
-                    c10->cd(pixel[i] + 1);
-                    h_p2p_range1[i]->Fill(p2p[i]);
-                }
-                if (p2p[i] >= 4 && p2p[i] < 5.5) {
-                    c11->cd(pixel[i] + 1);
-                    h_p2p_range2[i]->Fill(p2p[i]);
-                }
-                if (p2p[i] >= 5.5 && p2p[i] < 8) {
-                    c12->cd(pixel[i] + 1);
-                    h_p2p_range3[i]->Fill(p2p[i]);
-                }
-                c9->cd(pixel[i] + 1);
-            }
-        }
-        h_p2p[i]->Draw();
-        if(i == 0) ref_p2p = 
-    }
-
-    //pixel interni
-    for (int i = 0; i < 4; i++){
-        c9->cd(p[i] + 1);
-        h_p2p[i] = new TH1D(TString::Format("h_p2p_pixel%d", p[i]), TString::Format("Pixel %d;signal [SCOPE];Numero di eventi", p[i]), 100, 0, 100);
-        h_p2p[i]->SetDirectory(nullptr);
-        h_p2p_range1[i] = new TH1D(TString::Format("h_p2p_range1_pixel%d", p[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", p[i]), 40, 2, 8.5);
-        h_p2p_range1[i]->SetDirectory(nullptr);
-        h_p2p_range2[i] = new TH1D(TString::Format("h_p2p_range2_pixel%d", p[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", p[i]), 40, 2, 8.5);
-        h_p2p_range2[i]->SetDirectory(nullptr);
-        h_p2p_range3[i] = new TH1D(TString::Format("h_p2p_range3_pixel%d", p[i]), TString::Format("Pixel %d;P2P [ADC];Numero di eventi", p[i]), 40, 2, 8.5);
-        h_p2p_range3[i]->SetDirectory(nullptr);
-
-        if (input_pixels[i] &&
-            input_pixels[i]->GetBranch("signal") &&
-            input_pixels[i]->GetBranch("baseline")) {
-            for (Long64_t ev = 0; ev < input_pixels[i]->GetEntries(); ev++) {
-                input_pixels[i]->GetEntry(ev);
-                
-                double ref_p2p[12] = {};
-                input_pixels[0]->GetEntry(ev);
-                input_pixels[0]->SetBranchAddress("p2p", &ref_p2p[1]);
-
-                if (baseline[i] != -999.) h_p2p[i]->Fill(signal[i]);
-                if (baseline[i] != -999. && ref_p2p[1] >= 0. && ref_p2p[1] < 4.) {
-                    c10->cd(p[i] + 1);
-                    h_p2p_range1[i]->Fill(ref_p2p[1]);
-                }
-                if (baseline[i] != -999. && ref_p2p[1] >= 4. && ref_p2p[1] < 5.5) {
-                    c11->cd(p[i] + 1);
-                    h_p2p_range2[i]->Fill(ref_p2p[1]);
-                }
-                if (baseline[i] != -999. && ref_p2p[1] >= 5.5 && ref_p2p[1] < 8.) {
-                    c12->cd(p[i] + 1);
-                    h_p2p_range3[i]->Fill(ref_p2p[1]);
-                }
-                c9->cd(p[i] + 1);
-            }
-        }
-        c9->cd(p[i] + 1);
-        h_p2p[i]->Draw();
-        c10->cd(p[i] + 1);
-        h_p2p_range1[i]->Draw();
-        c11->cd(p[i] + 1);
-        h_p2p_range2[i]->Draw();
-        c12->cd(p[i] + 1);
-        h_p2p_range3[i]->Draw();
-
-    }
-    */
-
 
     const int ext[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
     const int cen[4]  = {5, 6, 9, 10};
@@ -417,8 +318,7 @@ void cluster() {
     c9->Divide(4, 4);
     TCanvas *cR[nR];
     for (int r = 0; r < nR; r++) {
-        cR[r] = new TCanvas(Form("c%d", 10 + r),
-                            Form("p2p(pixel %d) in [%.1f, %.1f)", refPixel, lo[r], hi[r]), 1200, 800);
+        cR[r] = new TCanvas(Form("c%d", 10 + r), Form("p2p(pixel %d) in [%.1f, %.1f)", refPixel, lo[r], hi[r]), 1200, 800);
         cR[r]->Divide(4, 4);
     }
 
@@ -441,13 +341,10 @@ void cluster() {
         }
         tree[px]->SetBranchAddress("p2p", &p2p[px]);
 
-        h_tot[px] = new TH1D(Form("h_p2p_pixel%d", px),
-                            Form("Pixel %d;P2P [ADC];Eventi", px), 40, 0, 8.5);
+        h_tot[px] = new TH1D(Form("h_p2p_pixel%d", px), Form("Pixel %d;P2P [ADC];Eventi", px), 40, 0, 8.5);
         h_tot[px]->SetDirectory(nullptr);
         for (int r = 0; r < nR; r++) {
-            h_rng[r][px] = new TH1D(Form("h_p2p_r%d_pixel%d", r, px),
-                                    Form("Pixel %d, p2p ref [%.1f,%.1f);P2P [ADC];Eventi", px, lo[r], hi[r]),
-                                    40, 0, 8.5);
+            h_rng[r][px] = new TH1D(Form("h_p2p_r%d_pixel%d", r, px), Form("Pixel %d, p2p ref [%.1f,%.1f);P2P [ADC];Eventi", px, lo[r], hi[r]), 40, 0, 8.5);
             h_rng[r][px]->SetDirectory(nullptr);
         }
     }
@@ -464,26 +361,20 @@ void cluster() {
         tree[px]->SetBranchAddress("signal",   &sig[px]);
         tree[px]->SetBranchAddress("baseline", &base[px]);
 
-        h_tot[px] = new TH1D(Form("h_sig_pixel%d", px),
-                            Form("Pixel %d;signal [SCOPE];Eventi", px), 100, 0, 100);
+        h_tot[px] = new TH1D(Form("h_sig_pixel%d", px), Form("Pixel %d;signal [SCOPE];Eventi", px), 100, 0, 100);
         h_tot[px]->SetDirectory(nullptr);
         for (int r = 0; r < nR; r++) {
-            h_rng[r][px] = new TH1D(Form("h_sig_r%d_pixel%d", r, px),
-                                    Form("Pixel %d, p2p ref [%.1f,%.1f);signal [SCOPE];Eventi", px, lo[r], hi[r]),
-                                    100, 0, 100);
+            h_rng[r][px] = new TH1D(Form("h_sig_r%d_pixel%d", r, px), Form("Pixel %d, p2p ref [%.1f,%.1f);signal [SCOPE];Eventi", px, lo[r], hi[r]), 100, 0, 100);
             h_rng[r][px]->SetDirectory(nullptr);
         }
     }
 
-    // ---- controlli ----
-    if (!tree[refPixel]) { std::cerr << "Tree di riferimento mancante" << std::endl; return; }
-    Long64_t nEv = tree[refPixel]->GetEntries();
-    for (int px = 0; px < 16; px++)
-        if (tree[px] && tree[px]->GetEntries() != nEv)
-            std::cerr << "ATTENZIONE: pixel " << px << " ha " << tree[px]->GetEntries()
-                    << " entry invece di " << nEv << std::endl;
 
+    
     // ================= UN SOLO CICLO SUGLI EVENTI =================
+    
+    Long64_t nEv = tree[refPixel]->GetEntries();
+    
     for (Long64_t ev = 0; ev < nEv; ev++) {
 
         // leggo l'evento in tutti i tree
@@ -527,4 +418,112 @@ void cluster() {
     c9->Update();
     for (int r = 0; r < nR; r++) cR[r]->Update();
 
+
+    //------------------------------------------------------------------------------------------------------------------------------
+
+        // =====================================================================
+    // Distribuzioni di signal (pixel interni) e p2p (pixel esterni)
+    // in funzione del cluster size (numero di pixel interni accesi)
+    // =====================================================================
+    {
+        const int extPx[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
+        const int cenPx[4]  = {5, 6, 9, 10};
+        const int nCS = 4;   // cluster size 1..4
+
+        // ---- canvas: uno per cluster size ----
+        TCanvas *cCS[nCS];
+        for (int s = 0; s < nCS; s++) {
+            cCS[s] = new TCanvas(Form("cCS%d", s + 1),
+                                 Form("P2P / Signal - %d pixel interni accesi", s + 1),
+                                 1200, 800);
+            cCS[s]->Divide(4, 4);
+        }
+
+        // ---- tutto indicizzato per NUMERO DI PIXEL (0..15) ----
+        TTree *tr[16] = {};
+        double v_p2p[16], v_sig[16], v_base[16];
+        for (int i = 0; i < 16; i++) { v_p2p[i] = 0; v_sig[i] = 0; v_base[i] = 0; }
+
+        TH1D *h_cs[nCS][16] = {};   // p2p (esterni) o signal (centrali) per cluster size
+
+        // ---- tree + istogrammi pixel esterni ----
+        for (int k = 0; k < 12; k++) {
+            int px = extPx[k];
+            tr[px] = (TTree*)inputfile->Get(Form("pixel%d", px));
+            if (!tr[px] || !tr[px]->GetBranch("p2p")) {
+                std::cerr << "Manca tree/branch p2p per pixel " << px << std::endl;
+                tr[px] = nullptr;
+                continue;
+            }
+            tr[px]->SetBranchAddress("p2p", &v_p2p[px]);
+
+            for (int s = 0; s < nCS; s++) {
+                h_cs[s][px] = new TH1D(Form("h_cs_p2p_s%d_pixel%d", s + 1, px),
+                                       Form("Pixel %d, cluster size = %d;P2P [ADC];Eventi", px, s + 1),
+                                       40, 0, 8.5);
+                h_cs[s][px]->SetDirectory(nullptr);
+            }
+        }
+
+        // ---- tree + istogrammi pixel centrali ----
+        for (int k = 0; k < 4; k++) {
+            int px = cenPx[k];
+            tr[px] = (TTree*)inputfile->Get(Form("pixel%d", px));
+            if (!tr[px] || !tr[px]->GetBranch("signal") || !tr[px]->GetBranch("baseline")) {
+                std::cerr << "Manca tree/branch signal o baseline per pixel " << px << std::endl;
+                tr[px] = nullptr;
+                continue;
+            }
+            tr[px]->SetBranchAddress("signal",   &v_sig[px]);
+            tr[px]->SetBranchAddress("baseline", &v_base[px]);
+
+            for (int s = 0; s < nCS; s++) {
+                h_cs[s][px] = new TH1D(Form("h_cs_sig_s%d_pixel%d", s + 1, px),
+                                       Form("Pixel %d, cluster size = %d;signal [SCOPE];Eventi", px, s + 1),
+                                       100, 0, 100);
+                h_cs[s][px]->SetDirectory(nullptr);
+            }
+        }
+
+        // ---- un solo ciclo sugli eventi ----
+        for (Long64_t ev = 0; ev < nEntries; ev++) {
+
+            for (int px = 0; px < 16; px++)
+                if (tr[px]) tr[px]->GetEntry(ev);
+
+            // cluster size = numero di pixel interni accesi
+            int csize = 0;
+            for (int k = 0; k < 4; k++) {
+                int px = cenPx[k];
+                if (tr[px] && v_base[px] != -999.) csize++;
+            }
+            if (csize < 1 || csize > nCS) continue;   // nessun pixel acceso: scarta
+            int sIdx = csize - 1;
+
+            // pixel esterni: p2p
+            for (int k = 0; k < 12; k++) {
+                int px = extPx[k];
+                if (!tr[px]) continue;
+                h_cs[sIdx][px]->Fill(v_p2p[px]);
+            }
+
+            // pixel centrali: signal (solo se acceso)
+            for (int k = 0; k < 4; k++) {
+                int px = cenPx[k];
+                if (!tr[px] || v_base[px] == -999.) continue;
+                h_cs[sIdx][px]->Fill(v_sig[px]);
+            }
+        }
+
+        // ---- disegno ----
+        for (int s = 0; s < nCS; s++) {
+            for (int px = 0; px < 16; px++) {
+                if (!h_cs[s][px]) continue;
+                cCS[s]->cd(px + 1);
+                h_cs[s][px]->Draw();
+            }
+            cCS[s]->Modified();
+            cCS[s]->Update();
+        }
+    }
 }
