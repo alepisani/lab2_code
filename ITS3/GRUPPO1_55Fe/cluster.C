@@ -362,7 +362,9 @@ void cluster() {
             cCS[s]->Update();
         }
     }
-        
+       
+    
+    
     // =====================================================================
     // Per ciascun pixel centrale come seed: eventi con cluster_size == 1
     // (letto dal tree "cluster" di data.root) in cui l'unico pixel acceso e' il seed.
@@ -489,6 +491,125 @@ void cluster() {
             c5[s]->Modified();
             c5[s]->Update();
         }
+    }
+
+    
+
+    // =====================================================================
+    // Eventi in cui il p2p di un pixel ESTERNO scelto (selPx) e' in [p2pMin, p2pMax]
+    // Distribuzione del segnale su tutti i 16 pixel
+    //   - pixel interni (5, 6, 9, 10): signal (solo se acceso, da tree "cluster")
+    //   - pixel esterni:               p2p
+    // =====================================================================
+    {
+        // ---- OPZIONI ----
+        const int    selPx  = 0;      // <<< pixel esterno usato per la selezione
+        const double p2pMin = 6.0;    // <<< estremo inferiore del range di p2p
+        const double p2pMax = 8.0;    // <<< estremo superiore del range di p2p
+
+        const int cenPx[4]  = {5, 6, 9, 10};
+        const int extPx[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
+
+        bool isCen[16] = {};
+        for (int k = 0; k < 4; k++) isCen[cenPx[k]] = true;
+
+        int cenIdx[16];
+        for (int i = 0; i < 16; i++) cenIdx[i] = -1;
+        for (int k = 0; k < 4; k++) cenIdx[cenPx[k]] = k;
+
+        // controllo che selPx sia esterno
+        bool selValido = false;
+        for (int k = 0; k < 12; k++) if (extPx[k] == selPx) selValido = true;
+        if (!selValido) {
+            std::cerr << "selPx deve essere un pixel esterno: 0,1,2,3,4,7,8,11,12,13,14,15" << std::endl;
+            return;
+        }
+
+        // suffisso per nomi e titoli
+        TString selTitle = Form("p2p pixel %d in [%g, %g]", selPx, p2pMin, p2pMax);
+        TString selName  = Form("_sel%d_p2p_%g_%g", selPx, p2pMin, p2pMax);
+        selName.ReplaceAll(".", "p");
+        selName.ReplaceAll("-", "m");
+
+        // ---- tree cluster (per sapere quali pixel centrali sono accesi) ----
+        TTree *t_cl = (TTree*)inputfile->Get("cluster");
+        if (!t_cl) { std::cerr << "Manca il tree cluster" << std::endl; return; }
+        Int_t cl_on[4] = {0, 0, 0, 0};
+        t_cl->SetBranchAddress("pixel_on", cl_on);
+
+        // ---- tree dei 16 pixel: signal per i centrali, p2p per gli esterni ----
+        TTree *tr[16] = {};
+        double v_val[16];
+        for (int i = 0; i < 16; i++) v_val[i] = 0;
+
+        for (int px = 0; px < 16; px++) {
+            tr[px] = (TTree*)inputfile->Get(Form("pixel%d", px));
+            if (!tr[px]) { std::cerr << "Manca il tree pixel" << px << std::endl; continue; }
+
+            const char *br = isCen[px] ? "signal" : "p2p";
+            if (!tr[px]->GetBranch(br)) {
+                std::cerr << "Manca il branch " << br << " per pixel " << px << std::endl;
+                tr[px] = nullptr;
+                continue;
+            }
+            tr[px]->SetBranchAddress(br, &v_val[px]);
+        }
+
+        if (!tr[selPx]) { std::cerr << "Tree/branch del pixel di selezione non disponibile" << std::endl; return; }
+
+        Long64_t nCl = t_cl->GetEntries();
+        if (nCl != nEntries)
+            std::cerr << "Attenzione: cluster ha " << nCl << " entries, i pixel " << nEntries << std::endl;
+
+        // ---- canvas e istogrammi ----
+        TCanvas *c6 = new TCanvas(Form("c6%s", selName.Data()),
+                                  Form("Eventi con %s", selTitle.Data()), 1200, 900);
+        c6->Divide(4, 4);
+
+        TH1D *h_sel[16] = {};
+        for (int px = 0; px < 16; px++) {
+            if (!tr[px]) continue;
+            if (isCen[px]) {
+                h_sel[px] = new TH1D(Form("h_sel_pixel%d%s", px, selName.Data()),
+                                     Form("Pixel %d (%s);signal [SCOPE];Eventi", px, selTitle.Data()),
+                                     100, 0, 100);
+            } else {
+                h_sel[px] = new TH1D(Form("h_sel_pixel%d%s", px, selName.Data()),
+                                     Form("Pixel %d (%s);P2P [ADC];Eventi", px, selTitle.Data()),
+                                     40, 0, 8.5);
+            }
+            h_sel[px]->SetDirectory(nullptr);
+        }
+
+        // ---- ciclo sugli eventi ----
+        int n_sel = 0;
+        Long64_t nLoop = std::min(nCl, nEntries);
+        for (Long64_t ev = 0; ev < nLoop; ev++) {
+            tr[selPx]->GetEntry(ev);
+            if (v_val[selPx] < p2pMin || v_val[selPx] > p2pMax) continue;   // selezione sul p2p
+
+            t_cl->GetEntry(ev);
+            for (int px = 0; px < 16; px++)
+                if (tr[px]) tr[px]->GetEntry(ev);
+
+            n_sel++;
+            for (int px = 0; px < 16; px++) {
+                if (!h_sel[px]) continue;
+                // pixel centrali: signal solo se acceso
+                if (isCen[px] && !cl_on[cenIdx[px]]) continue;
+                h_sel[px]->Fill(v_val[px]);
+            }
+        }
+        std::cout << "Eventi con " << selTitle << ": " << n_sel << std::endl;
+
+        // ---- disegno ----
+        for (int px = 0; px < 16; px++) {
+            if (!h_sel[px]) continue;
+            c6->cd(px + 1);
+            h_sel[px]->Draw();
+        }
+        c6->Modified();
+        c6->Update();
     }
 }
 
