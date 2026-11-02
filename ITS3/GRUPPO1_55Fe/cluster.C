@@ -368,10 +368,22 @@ void cluster() {
     // (letto dal tree "cluster" di data.root) in cui l'unico pixel acceso e' il seed.
     //   - pixel interni (5, 6, 9, 10): signal (solo se acceso)
     //   - pixel esterni:               p2p
+    // Taglio opzionale: signal del pixel acceso > sigCut.
     // =====================================================================
     {
-        const int cenPx[4]  = {5, 6, 9, 10};
-        const int extPx[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
+        // ---- OPZIONI ----
+        const bool   applyCut = true;    // <<< true: tengo solo signal > sigCut, false: nessun taglio
+        const double sigCut   = 60.;     // <<< soglia sul signal del pixel acceso
+
+        // suffisso per titoli e nomi (evita nomi duplicati tra esecuzioni con opzioni diverse)
+        TString cutTitle = "";
+        TString cutName  = "";
+        if (applyCut) {
+            cutTitle = Form(", signal > %.0f", sigCut);
+            cutName  = Form("_gt%.0f", sigCut);
+        }
+
+        const int cenPx[4] = {5, 6, 9, 10};
         const int nSeed = 4;
 
         bool isCen[16] = {};
@@ -419,19 +431,21 @@ void cluster() {
 
         for (int s = 0; s < nSeed; s++) {
             const int seedPx = cenPx[s];
-            c5[s] = new TCanvas(Form("c5_seed%d", seedPx),
-                                Form("Eventi con solo pixel %d acceso", seedPx), 1200, 900);
+            c5[s] = new TCanvas(Form("c5_seed%d%s", seedPx, cutName.Data()),
+                                Form("Solo pixel %d acceso%s", seedPx, cutTitle.Data()), 1200, 900);
             c5[s]->Divide(4, 4);
 
             for (int px = 0; px < 16; px++) {
                 if (!tr[px]) continue;
                 if (isCen[px]) {
-                    h_seed[s][px] = new TH1D(Form("h_seed%d_pixel%d", seedPx, px),
-                                             Form("Pixel %d (solo pixel %d acceso);signal [SCOPE];Eventi", px, seedPx),
+                    h_seed[s][px] = new TH1D(Form("h_seed%d_pixel%d%s", seedPx, px, cutName.Data()),
+                                             Form("Pixel %d (solo pixel %d acceso%s);signal [SCOPE];Eventi",
+                                                  px, seedPx, cutTitle.Data()),
                                              100, 0, 100);
                 } else {
-                    h_seed[s][px] = new TH1D(Form("h_seed%d_pixel%d", seedPx, px),
-                                             Form("Pixel %d (solo pixel %d acceso);P2P [ADC];Eventi", px, seedPx),
+                    h_seed[s][px] = new TH1D(Form("h_seed%d_pixel%d%s", seedPx, px, cutName.Data()),
+                                             Form("Pixel %d (solo pixel %d acceso%s);P2P [ADC];Eventi",
+                                                  px, seedPx, cutTitle.Data()),
                                              40, 0, 8.5);
                 }
                 h_seed[s][px]->SetDirectory(nullptr);
@@ -451,6 +465,9 @@ void cluster() {
             for (int px = 0; px < 16; px++)
                 if (tr[px]) tr[px]->GetEntry(ev);
 
+            // taglio opzionale: signal del pixel acceso > sigCut
+            if (applyCut && v_val[cenPx[sIdx]] <= sigCut) continue;
+
             n_sel[sIdx]++;
             for (int px = 0; px < 16; px++) {
                 if (!h_seed[sIdx][px]) continue;
@@ -462,7 +479,8 @@ void cluster() {
 
         // ---- disegno ----
         for (int s = 0; s < nSeed; s++) {
-            std::cout << "Eventi con cluster size 1 (solo pixel " << cenPx[s] << "): " << n_sel[s] << std::endl;
+            std::cout << "Eventi con cluster size 1 (solo pixel " << cenPx[s] << ")"
+                      << cutTitle << ": " << n_sel[s] << std::endl;
             for (int px = 0; px < 16; px++) {
                 if (!h_seed[s][px]) continue;
                 c5[s]->cd(px + 1);
@@ -472,7 +490,6 @@ void cluster() {
             c5[s]->Update();
         }
     }
-
 }
 
 
