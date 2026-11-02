@@ -363,4 +363,116 @@ void cluster() {
         }
     }
         
+    // =====================================================================
+    // Per ciascun pixel centrale come seed: eventi con cluster_size == 1
+    // (letto dal tree "cluster" di data.root) in cui l'unico pixel acceso e' il seed.
+    //   - pixel interni (5, 6, 9, 10): signal (solo se acceso)
+    //   - pixel esterni:               p2p
+    // =====================================================================
+    {
+        const int cenPx[4]  = {5, 6, 9, 10};
+        const int extPx[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
+        const int nSeed = 4;
+
+        bool isCen[16] = {};
+        for (int k = 0; k < 4; k++) isCen[cenPx[k]] = true;
+
+        // indice del pixel centrale (0..3) dato il numero di pixel, -1 se esterno
+        int cenIdx[16];
+        for (int i = 0; i < 16; i++) cenIdx[i] = -1;
+        for (int k = 0; k < 4; k++) cenIdx[cenPx[k]] = k;
+
+        // ---- tree cluster ----
+        TTree *t_cl = (TTree*)inputfile->Get("cluster");
+        if (!t_cl) { std::cerr << "Manca il tree cluster" << std::endl; return; }
+        Int_t cl_size = 0;
+        Int_t cl_on[4] = {0, 0, 0, 0};
+        t_cl->SetBranchAddress("cluster_size", &cl_size);
+        t_cl->SetBranchAddress("pixel_on",     cl_on);
+
+        // ---- tree dei 16 pixel: signal per i centrali, p2p per gli esterni ----
+        TTree *tr[16] = {};
+        double v_val[16];
+        for (int i = 0; i < 16; i++) v_val[i] = 0;
+
+        for (int px = 0; px < 16; px++) {
+            tr[px] = (TTree*)inputfile->Get(Form("pixel%d", px));
+            if (!tr[px]) { std::cerr << "Manca il tree pixel" << px << std::endl; continue; }
+
+            const char *br = isCen[px] ? "signal" : "p2p";
+            if (!tr[px]->GetBranch(br)) {
+                std::cerr << "Manca il branch " << br << " per pixel " << px << std::endl;
+                tr[px] = nullptr;
+                continue;
+            }
+            tr[px]->SetBranchAddress(br, &v_val[px]);
+        }
+
+        Long64_t nCl = t_cl->GetEntries();
+        if (nCl != nEntries)
+            std::cerr << "Attenzione: cluster ha " << nCl << " entries, i pixel " << nEntries << std::endl;
+
+        // ---- canvas e istogrammi ----
+        TCanvas *c5[nSeed] = {};
+        TH1D    *h_seed[nSeed][16] = {};
+        int      n_sel[nSeed] = {0, 0, 0, 0};
+
+        for (int s = 0; s < nSeed; s++) {
+            const int seedPx = cenPx[s];
+            c5[s] = new TCanvas(Form("c5_seed%d", seedPx),
+                                Form("Eventi con solo pixel %d acceso", seedPx), 1200, 900);
+            c5[s]->Divide(4, 4);
+
+            for (int px = 0; px < 16; px++) {
+                if (!tr[px]) continue;
+                if (isCen[px]) {
+                    h_seed[s][px] = new TH1D(Form("h_seed%d_pixel%d", seedPx, px),
+                                             Form("Pixel %d (solo pixel %d acceso);signal [SCOPE];Eventi", px, seedPx),
+                                             100, 0, 100);
+                } else {
+                    h_seed[s][px] = new TH1D(Form("h_seed%d_pixel%d", seedPx, px),
+                                             Form("Pixel %d (solo pixel %d acceso);P2P [ADC];Eventi", px, seedPx),
+                                             40, 0, 8.5);
+                }
+                h_seed[s][px]->SetDirectory(nullptr);
+            }
+        }
+
+        // ---- ciclo sugli eventi ----
+        Long64_t nLoop = std::min(nCl, nEntries);
+        for (Long64_t ev = 0; ev < nLoop; ev++) {
+            t_cl->GetEntry(ev);
+            if (cl_size != 1) continue;          // selezione da data.root
+
+            int sIdx = -1;
+            for (int s = 0; s < nSeed; s++) if (cl_on[s]) sIdx = s;
+            if (sIdx < 0) continue;
+
+            for (int px = 0; px < 16; px++)
+                if (tr[px]) tr[px]->GetEntry(ev);
+
+            n_sel[sIdx]++;
+            for (int px = 0; px < 16; px++) {
+                if (!h_seed[sIdx][px]) continue;
+                // pixel centrali: signal solo se acceso (cioe' solo il seed)
+                if (isCen[px] && !cl_on[cenIdx[px]]) continue;
+                h_seed[sIdx][px]->Fill(v_val[px]);
+            }
+        }
+
+        // ---- disegno ----
+        for (int s = 0; s < nSeed; s++) {
+            std::cout << "Eventi con cluster size 1 (solo pixel " << cenPx[s] << "): " << n_sel[s] << std::endl;
+            for (int px = 0; px < 16; px++) {
+                if (!h_seed[s][px]) continue;
+                c5[s]->cd(px + 1);
+                h_seed[s][px]->Draw();
+            }
+            c5[s]->Modified();
+            c5[s]->Update();
+        }
+    }
+
 }
+
+
