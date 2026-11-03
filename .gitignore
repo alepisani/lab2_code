@@ -8,7 +8,7 @@
 */test.C
 
 data.csv
-dout.raw
+*.raw
 
 not_calibrated/*
 
