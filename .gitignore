@@ -5,7 +5,10 @@
 *.pcm
 *.d
 *.so
-*test.C
+*/test.C
+
+data.csv
+dout.raw
 
 not_calibrated/*
 

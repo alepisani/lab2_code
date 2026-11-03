@@ -1,0 +1,149 @@
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x70 dead pixel count: 6
+****** WARNING: 9 new masked chips in stave 0:
+       0x71 0x72 0x73 0x74 0x78 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x71 dead pixel count: 0
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x72 0x73 0x74 0x78 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x72 dead pixel count: 1024
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x73 0x74 0x78 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 9
+Events with data: 5111
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x73 dead pixel count: 0
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x72 0x74 0x78 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x74 dead pixel count: 3
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x72 0x73 0x78 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x78 dead pixel count: 0
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x72 0x73 0x74 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x79 dead pixel count: 0
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x72 0x73 0x74 0x78 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+****** WARNING: 10 new masked chips in stave 0:
+       0x70 0x71 0x72 0x73 0x74 0x78 0x79 0x7a 0x7b 0x7c 
+Event/trigger count: 5120
+Empty events: 5120
+Events with data: 0
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 1
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x7b dead pixel count: 1
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x72 0x73 0x74 0x78 0x79 0x7a 0x7c 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
+Decoding file...
+
+Summary:
+
+Plotting hitmap...
+chipid: 0x7c dead pixel count: 2
+****** WARNING: 9 new masked chips in stave 0:
+       0x70 0x71 0x72 0x73 0x74 0x78 0x79 0x7a 0x7b 
+Event/trigger count: 5120
+Empty events: 0
+Events with data: 5120
+Busy transition count: 0
+Busy error count: 0
+Truncated events: 0
+Corrupt events: 0
