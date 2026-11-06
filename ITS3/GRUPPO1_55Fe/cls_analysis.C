@@ -11,6 +11,8 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <TProfile.h>
+#include <TPad.h>
 
 using namespace std;
 
@@ -155,9 +157,11 @@ Dataset d;                                  // dati letti una sola volta
 const bool   optWriteClusterTree = false;   
 const bool   optDoMap          = false;
 const bool   optDoClusterCount = false;
-const bool   optDoPerClusterSz = true;
-const bool   optDoSeed         = true;
-const bool   optDoP2PSelection = true;
+const bool   optDoPerClusterSz = false;
+const bool   optDoSeed         = false;
+const bool   optDoP2PSelection = false;
+const bool   optDoCentroid = false;
+const bool   optDoOpposite = true;
 
 // legge data.root una sola volta (le funzioni Plot* lo chiamano da sole se i dati non ci sono)
 bool LoadData() {
@@ -439,6 +443,238 @@ void WriteClusterTree() {
     t->Write("", TObject::kOverwrite);
     f->Close();
 }
+// =====================================================================
+// COSTANTI DA AGGIUNGERE IN ALTO (dopo le altre costanti / opzioni)
+// =====================================================================
+const double PITCH = 10.;                   // [micron] dimensione del pixel 20x20
+const int    centroidSelPx = 0;             // pixel esterno da studiare
+
+// =====================================================================
+// ANALISI 6: segnale dei pixel interni quando si considera un evento
+//   del pixel esterno selPx, in funzione della distanza (geometria 4x4)
+//   Eventi selezionati: p2p di selPx in [p2pMin, p2pMax]
+//   Tutto in un unico canvas: griglia 4x4 (pad = posizione del pixel)
+//   + due riepiloghi a destra. Distanze in micron.
+// =====================================================================
+inline double PxX(int id) { return (id % 4) * PITCH; }   // colonna [um]
+inline double PxY(int id) { return (id / 4) * PITCH; }   // riga [um]
+
+// distanza tra due pixel [um]
+inline double PxDist(int a, int b) {
+    double dx = PxX(a) - PxX(b), dy = PxY(a) - PxY(b);
+    return std::sqrt(dx*dx + dy*dy);
+}
+
+// calcola il centroide interno dell'evento [um]; false se non definito
+bool Centroid(Long64_t ev, double &cx, double &cy) {
+    if (d.csize[ev] < 1 || d.totSig[ev] <= 0.) return false;
+    cx = 0.; cy = 0.;
+    for (int i = 0; i < NCEN; i++) {
+        if (!d.on[ev][i]) continue;
+        double s = d.px[CEN_PX[i]].signal[ev];
+        cx += s * PxX(CEN_PX[i]);
+        cy += s * PxY(CEN_PX[i]);
+    }
+    cx /= d.totSig[ev];
+    cy /= d.totSig[ev];
+    return true;
+}
+
+void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
+    if (!LoadData()) return;
+
+    if (selPx < 0 || selPx >= NPIX || IsCentralPx(selPx) || !d.px[selPx].Valid()) {
+        std::cerr << "selPx deve essere un pixel esterno valido: 0,1,2,3,4,7,8,11,12,13,14,15" << std::endl;
+        return;
+    }
+
+    const double dMax   = 4.5 * PITCH;   // 0 - 90 um
+    const double sMax   = 300.;          // range segnale totale
+    const double sMaxPx = 100.;          // range segnale singolo pixel
+
+    // ---- istogrammi ----
+    // segnale totale interno vs distanza centroide - selPx
+    TH2D *hTot = new TH2D(Form("h_intTot_sel%d", selPx),
+                          Form("Segnale totale interni vs distanza dal pixel %d;Distanza centroide - pixel %d [#mum];Segnale totale [SCOPE]",
+                               selPx, selPx),
+                          45, 0, dMax, 100, 0, sMax);
+    hTot->SetDirectory(nullptr);
+
+    // segnale di ogni pixel centrale vs distanza (fissa) pixel centrale - selPx
+    TH2D *hAll = new TH2D(Form("h_intAll_sel%d", selPx),
+                          Form("Segnale pixel interni vs distanza dal pixel %d;Distanza pixel interno - pixel %d [#mum];Signal [SCOPE]",
+                               selPx, selPx),
+                          45, 0, dMax, 100, 0, sMaxPx);
+    hAll->SetDirectory(nullptr);
+
+    // un istogramma per ogni pixel centrale: signal vs distanza centroide - selPx
+    TH2D *hEach[NCEN];
+    for (int k = 0; k < NCEN; k++) {
+        hEach[k] = new TH2D(Form("h_intPx%d_sel%d", CEN_PX[k], selPx),
+                            Form("Pixel %d (d=%.0f #mum);Dist. centroide-px %d [#mum];Signal [SCOPE]",
+                                 CEN_PX[k], PxDist(CEN_PX[k], selPx), selPx),
+                            30, 0, dMax, 50, 0, sMaxPx);
+        hEach[k]->SetDirectory(nullptr);
+    }
+
+    // p2p del pixel selezionato (eventi scelti)
+    TH1D *hSel = new TH1D(Form("h_selP2P_%d", selPx),
+                          Form("Pixel %d: P2P;P2P [ADC];Eventi", selPx), 40, 0, 8.5);
+    hSel->SetDirectory(nullptr);
+
+    // ---- riempimento ----
+    int nUsed = 0;
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        double p0 = d.px[selPx].p2p[ev];
+        if (p0 < p2pMin || p0 > p2pMax) continue;
+
+        double cx, cy;
+        if (!Centroid(ev, cx, cy)) continue;
+        nUsed++;
+
+        double dx = cx - PxX(selPx);
+        double dy = cy - PxY(selPx);
+        double distC = std::sqrt(dx*dx + dy*dy);
+
+        hSel->Fill(p0);
+        hTot->Fill(distC, d.totSig[ev]);
+
+        for (int k = 0; k < NCEN; k++) {
+            if (!d.on[ev][k]) continue;
+            double s = d.px[CEN_PX[k]].signal[ev];
+            hAll->Fill(PxDist(CEN_PX[k], selPx), s);
+            hEach[k]->Fill(distC, s);
+        }
+    }
+    std::cout << "Eventi con p2p pixel " << selPx << " in [" << p2pMin << ", " << p2pMax
+              << "] e centroide definito: " << nUsed << std::endl;
+
+    // ---- canvas unico ----
+    gStyle->SetOptStat(0);
+    gStyle->SetTitleFontSize(0.07);
+    TCanvas *c = new TCanvas(Form("c_intSig_sel%d", selPx),
+                             Form("Segnale pixel interni - eventi pixel %d", selPx), 1600, 900);
+
+    const double gridW = 0.70;           // frazione di larghezza per la griglia 4x4
+    const double w = gridW / 4., h = 1. / 4.;
+
+    for (int id = 0; id < NPIX; id++) {
+        int r = id / 4, col = id % 4;
+        double x1 = col * w, x2 = (col + 1) * w;
+        double y2 = 1. - r * h, y1 = y2 - h;
+
+        c->cd();
+        TPad *pad = new TPad(Form("pad_px%d_sel%d", id, selPx), "", x1, y1, x2, y2);
+        pad->SetMargin(0.17, 0.14, 0.17, 0.12);
+        pad->Draw();
+        pad->cd();
+
+        int k = CenIndex(id);
+        if (k >= 0) {
+            // pixel centrale: signal vs distanza centroide
+            hEach[k]->GetXaxis()->SetLabelSize(0.06);
+            hEach[k]->GetYaxis()->SetLabelSize(0.06);
+            hEach[k]->GetXaxis()->SetTitleSize(0.06);
+            hEach[k]->GetYaxis()->SetTitleSize(0.06);
+            hEach[k]->GetXaxis()->SetTitleOffset(1.0);
+            hEach[k]->GetYaxis()->SetTitleOffset(1.2);
+            hEach[k]->Draw("COLZ");
+        } else if (id == selPx) {
+            // pixel selezionato: distribuzione p2p
+            pad->SetFillColor(kYellow - 9);
+            hSel->GetXaxis()->SetLabelSize(0.06);
+            hSel->GetYaxis()->SetLabelSize(0.06);
+            hSel->GetXaxis()->SetTitleSize(0.06);
+            hSel->GetYaxis()->SetTitleSize(0.06);
+            hSel->GetYaxis()->SetTitleOffset(1.2);
+            hSel->Draw();
+        } else {
+            // altri esterni: solo etichetta
+            pad->SetFillColor(kGray);
+            TLatex t;
+            t.SetNDC();
+            t.SetTextAlign(22);
+            t.SetTextSize(0.12);
+            t.DrawLatex(0.5, 0.58, Form("Pixel %d", id));
+            t.SetTextSize(0.08);
+            t.DrawLatex(0.5, 0.38, Form("d = %.0f #mum da px %d", PxDist(id, selPx), selPx));
+        }
+    }
+
+    // ---- riepiloghi a destra ----
+    c->cd();
+    TPad *pR1 = new TPad(Form("pad_tot_sel%d", selPx), "", gridW, 0.5, 1., 1.);
+    pR1->SetMargin(0.14, 0.14, 0.12, 0.10);
+    pR1->Draw();
+    pR1->cd();
+    hTot->Draw("COLZ");
+    TProfile *pTot = hTot->ProfileX(Form("p_intTot_sel%d", selPx));
+    pTot->SetLineColor(kRed);
+    pTot->SetMarkerColor(kRed);
+    pTot->SetMarkerStyle(20);
+    pTot->SetMarkerSize(0.7);
+    pTot->Draw("SAME");
+
+    c->cd();
+    TPad *pR2 = new TPad(Form("pad_all_sel%d", selPx), "", gridW, 0., 1., 0.5);
+    pR2->SetMargin(0.14, 0.14, 0.12, 0.10);
+    pR2->Draw();
+    pR2->cd();
+    hAll->Draw("COLZ");
+
+    c->Modified();
+    c->Update();
+}
+
+// =====================================================================
+// ANALISI 7: eventi con i due pixel centrali OPPOSTI (diagonale) accesi
+//   coppia A: (5,10)   coppia B: (6,9)
+//   exclusive = true  -> solo quei due pixel accesi (cluster size = 2),
+//                        gli altri due centrali spenti
+//   exclusive = false -> basta che i due pixel della coppia siano accesi
+//                        (gli altri centrali possono essere accesi o no)
+//   Un canvas 4x4 per coppia, con signal (centrali) / p2p (esterni)
+//   di tutti i 16 pixel.
+// =====================================================================
+void PlotOppositePairs(bool exclusive = true) {
+    if (!LoadData()) return;
+
+    // indici in CEN_PX: 5->0, 6->1, 9->2, 10->3
+    const int NPAIR = 2;
+    const int pairs[NPAIR][2] = { {0, 3},     // (5,10)
+                                  {1, 2} };   // (6,9)
+
+    TCanvas *c[NPAIR];
+    TH1D    *h[NPAIR][NPIX];
+    int      nSel[NPAIR] = {0, 0};
+
+    for (int p = 0; p < NPAIR; p++) {
+        int pa = CEN_PX[pairs[p][0]], pb = CEN_PX[pairs[p][1]];
+        TString suffix = exclusive ? "solo" : "almeno";
+        c[p] = new TCanvas(Form("c7_opp%d_%d_%s", pa, pb, suffix.Data()),
+                           Form("Pixel opposti %d e %d accesi (%s)", pa, pb, suffix.Data()),
+                           1200, 900);
+        c[p]->Divide(4, 4);
+        MakeHists16(Form("h_opp%d_%d_%s", pa, pb, suffix.Data()),
+                    Form("px %d e %d accesi%s", pa, pb, exclusive ? ", solo questi" : ""),
+                    h[p]);
+    }
+
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        if (exclusive && d.csize[ev] != 2) continue;
+        for (int p = 0; p < NPAIR; p++) {
+            if (!d.on[ev][pairs[p][0]] || !d.on[ev][pairs[p][1]]) continue;
+            nSel[p]++;
+            FillEvent16(ev, h[p]);
+        }
+    }
+
+    for (int p = 0; p < NPAIR; p++) {
+        std::cout << "Eventi con pixel " << CEN_PX[pairs[p][0]] << " e " << CEN_PX[pairs[p][1]]
+                  << " accesi" << (exclusive ? " (solo questi)" : "") << ": " << nSel[p] << std::endl;
+        Draw16(c[p], h[p]);
+    }
+}
 
 // =====================================================================
 // MACRO PRINCIPALE: esegue tutte le analisi con gli argomenti di default
@@ -454,6 +690,7 @@ void cls_analysis() {
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoSeed)         PlotSeed(true, 50., 150);    //bool applyCut = true, double sigCut_min = 0., double sigCut_max = 150.
     if (optDoP2PSelection) PlotP2PSelection(0, 5.5, 6); // pixel esterno 4, range [2, 5]
-
+    if (optDoCentroid)     PlotCentroid(centroidSelPx, 0., 8.5);   // eventi con p2p pixel 0 in range [xmin, xmax]
+    if (optDoOpposite)     PlotOppositePairs(true);   // true = solo i due pixel opposti accesi
 
 }
