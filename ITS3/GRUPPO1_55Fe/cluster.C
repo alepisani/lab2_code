@@ -8,6 +8,7 @@
 #include <TString.h>
 #include <iostream>
 #include <vector>
+#include <TLatex.h>
 
 using namespace std;
 
