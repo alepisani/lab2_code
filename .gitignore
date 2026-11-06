@@ -6,6 +6,7 @@
 *.d
 *.so
 */test.C
+.DS_Store
 
 data.csv
 *.raw

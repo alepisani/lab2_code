@@ -452,7 +452,7 @@ void cls_analysis() {
     if (optDoMap)          PlotMap();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoPerClusterSz) PlotPerClusterSize();
-    if (optDoSeed)         PlotSeed(true, 50., 150);        // taglio a 70
+    if (optDoSeed)         PlotSeed(true, 50., 150);    //bool applyCut = true, double sigCut_min = 0., double sigCut_max = 150.
     if (optDoP2PSelection) PlotP2PSelection(0, 5.5, 6); // pixel esterno 4, range [2, 5]
 
 
