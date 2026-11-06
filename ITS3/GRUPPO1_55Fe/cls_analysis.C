@@ -39,36 +39,36 @@ int CenIndex(int px) {          // posizione in CEN_PX, -1 se esterno
 //   - esterni:  p2p
 // =====================================================================
 class Pixel {
-public:
+    public:
     int  id      = -1;
     bool central = false;
     bool hasBaseline = false, hasSignal = false, hasP2P = false;
-
+    
     std::vector<double> baseline, signal, p2p;
-
+    
     // legge il tree "pixelN" una sola volta; ritorna il numero di entries
     Long64_t Load(TFile *f, int pxId) {
         id      = pxId;
         central = IsCentralPx(pxId);
         baseline.clear(); signal.clear(); p2p.clear();
-
+        
         TTree *t = (TTree*)f->Get(Form("pixel%d", id));
         if (!t) { std::cerr << "Manca il tree pixel" << id << std::endl; return 0; }
-
+        
         double b = 0., s = 0., p = 0.;
         hasBaseline = t->GetBranch("baseline") != nullptr;
         hasSignal   = t->GetBranch("signal")   != nullptr;
         hasP2P      = t->GetBranch("p2p")      != nullptr;
-
+        
         if (hasBaseline) t->SetBranchAddress("baseline", &b);
         if (hasSignal)   t->SetBranchAddress("signal",   &s);
         if (hasP2P)      t->SetBranchAddress("p2p",      &p);
-
+        
         Long64_t n = t->GetEntries();
         if (hasBaseline) baseline.reserve(n);
         if (hasSignal)   signal.reserve(n);
         if (hasP2P)      p2p.reserve(n);
-
+        
         for (Long64_t i = 0; i < n; i++) {
             t->GetEntry(i);
             if (hasBaseline) baseline.push_back(b);
@@ -78,13 +78,13 @@ public:
         t->ResetBranchAddresses();   // b, s, p sono variabili locali
         return n;
     }
-
+    
     // il pixel ha i dati che servono alle analisi?
     bool Valid() const { return central ? (hasBaseline && hasSignal) : hasP2P; }
-
+    
     // pixel acceso (solo centrali)
     bool IsOn(Long64_t ev) const { return central && hasBaseline && baseline[ev] != NOHIT; }
-
+    
     // grandezza "da mostrare": signal per i centrali, p2p per gli esterni
     double Value(Long64_t ev) const { return central ? signal[ev] : p2p[ev]; }
 };
@@ -93,15 +93,15 @@ public:
 // CLASSE DATASET: 16 pixel + informazioni di cluster calcolate in memoria
 // =====================================================================
 class Dataset {
-public:
+    public:
     Pixel    px[NPIX];
     Long64_t nEv = 0;
-
+    
     // info di cluster (una entry per evento)
     std::vector<int>                csize;    // numero di pixel centrali accesi
     std::vector<std::array<int,4>>  on;       // on[ev][i] = 1 se CEN_PX[i] acceso
     std::vector<double>             totSig;   // segnale totale del cluster
-
+    
     bool Load(TFile *f) {
         bool first = true;
         for (int i = 0; i < NPIX; i++) {
@@ -113,7 +113,7 @@ public:
             if (first) { nEv = n; first = false; }
             else if (n != nEv) {
                 std::cerr << "Attenzione: pixel " << i << " ha " << n << " entries (altri: " << nEv
-                          << "), uso il minimo" << std::endl;
+                << "), uso il minimo" << std::endl;
                 nEv = std::min(nEv, n);
             }
         }
@@ -122,7 +122,7 @@ public:
         BuildClusters();
         return true;
     }
-
+    
     void BuildClusters() {
         csize.assign(nEv, 0);
         on.assign(nEv, std::array<int,4>{0, 0, 0, 0});
@@ -138,7 +138,7 @@ public:
             }
         }
     }
-
+    
     // indice (0..3) dell'unico pixel centrale acceso, -1 se csize != 1
     int SeedIndex(Long64_t ev) const {
         if (csize[ev] != 1) return -1;
@@ -147,16 +147,14 @@ public:
     }
 };
 
+
 // =====================================================================
 // OPZIONI (valori di default) E DATASET GLOBALE
 // =====================================================================
 Dataset d;                                  // dati letti una sola volta
-
-const bool   optWriteClusterTree = false;   // true: scrive/aggiorna il tree "cluster" in data.root
-
-// quali analisi eseguire
-const bool   optDoMap          = true;
-const bool   optDoClusterCount = true;
+const bool   optWriteClusterTree = false;   
+const bool   optDoMap          = false;
+const bool   optDoClusterCount = false;
 const bool   optDoPerClusterSz = true;
 const bool   optDoSeed         = true;
 const bool   optDoP2PSelection = true;
@@ -338,13 +336,13 @@ void PlotPerClusterSize() {
 // ANALISI 4: cluster size = 1, per ogni pixel centrale come seed.
 // Taglio opzionale: signal del pixel acceso > sigCut
 // =====================================================================
-void PlotSeed(bool applyCut = true, double sigCut = 60.) {
+void PlotSeed(bool applyCut = true, double sigCut_min = 0., double sigCut_max = 150.) {
     if (!LoadData()) return;
 
     TString cutTitle = "", cutName = "";
     if (applyCut) {
-        cutTitle = Form(", signal > %.0f", sigCut);
-        cutName  = Form("_gt%.0f", sigCut);
+        cutTitle = Form(", signal in [%.0f, %.0f]", sigCut_min, sigCut_max);
+        cutName  = Form("_sig%.0f_%.0f", sigCut_min, sigCut_max);
     }
 
     TCanvas *c[NCEN];
@@ -362,7 +360,10 @@ void PlotSeed(bool applyCut = true, double sigCut = 60.) {
     for (Long64_t ev = 0; ev < d.nEv; ev++) {
         int s = d.SeedIndex(ev);
         if (s < 0) continue;
-        if (applyCut && d.px[CEN_PX[s]].signal[ev] <= sigCut) continue;
+        if (applyCut) {
+            double sig = d.px[CEN_PX[s]].signal[ev];
+            if (sig < sigCut_min || sig > sigCut_max) continue;
+        }
         nSel[s]++;
         FillEvent16(ev, h[s]);
     }
@@ -443,7 +444,7 @@ void WriteClusterTree() {
 // MACRO PRINCIPALE: esegue tutte le analisi con gli argomenti di default
 // (le singole funzioni si possono richiamare da ROOT anche con altri argomenti)
 // =====================================================================
-void cluster() {
+void cls_analysis() {
     if (!LoadData()) return;
 
     if (optWriteClusterTree) WriteClusterTree();
@@ -451,6 +452,8 @@ void cluster() {
     if (optDoMap)          PlotMap();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoPerClusterSz) PlotPerClusterSize();
-    if (optDoSeed)         PlotSeed();
-    if (optDoP2PSelection) PlotP2PSelection();
+    if (optDoSeed)         PlotSeed(true, 50., 150);        // taglio a 70
+    if (optDoP2PSelection) PlotP2PSelection(0, 5.5, 6); // pixel esterno 4, range [2, 5]
+
+
 }

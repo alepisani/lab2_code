@@ -504,8 +504,8 @@ void cluster() {
     {
         // ---- OPZIONI ----
         const int    selPx  = 0;      // <<< pixel esterno usato per la selezione
-        const double p2pMin = 6.0;    // <<< estremo inferiore del range di p2p
-        const double p2pMax = 8.0;    // <<< estremo superiore del range di p2p
+        const double p2pMin = 0.0;    // <<< estremo inferiore del range di p2p
+        const double p2pMax = 5.0;    // <<< estremo superiore del range di p2p
 
         const int cenPx[4]  = {5, 6, 9, 10};
         const int extPx[12] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
