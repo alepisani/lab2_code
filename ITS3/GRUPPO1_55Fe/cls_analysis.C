@@ -204,6 +204,7 @@ class Dataset {
 Dataset d;                                  // dati letti una sola volta
 bool   optWriteClusterTree = false;
 bool   optDoMap            = false;
+bool   optDoMap16          = false;
 bool   optDoClusterCount   = false;
 bool   optDoPerClusterSz   = false;
 bool   optDoSeed           = false;
@@ -288,6 +289,53 @@ void PlotMap() {
         TLatex *label = new TLatex(x + 0.5, y + 0.7, Form("Pixel %d", CEN_PX[i]));
         label->SetTextAlign(22);
         label->SetTextSize(0.03);
+        label->SetTextColor(kBlack);
+        label->Draw();
+    }
+    c->Modified();
+    c->Update();
+}
+
+// =====================================================================
+// ANALISI 1b: mappa 4x4 di tutti i pixel
+//   centrali: acceso (baseline != NOHIT)
+//   esterni : segnale > SEG_THR
+// =====================================================================
+void PlotMap16() {
+    if (!LoadData()) return;
+
+    TCanvas *c = new TCanvas("c1_16", "Mappa Pixel 4x4", 900, 800);
+    TH2D *h = new TH2D("h_map16",
+                       Form("Stato Pixel (4x4), esterni con segnale > %g;Colonna;Riga", SEG_THR),
+                       4, 0, 4, 4, 0, 4);
+    h->SetDirectory(nullptr);
+    gStyle->SetOptStat(0);
+
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        for (int i = 0; i < NPIX; i++) {
+            if (!d.px[i].Valid()) continue;
+            bool hit = d.px[i].central ? d.px[i].IsOn(ev) : d.px[i].Fired(ev);
+            if (!hit) continue;
+            // riga 0 in alto, come la numerazione dei pixel
+            h->Fill(i % 4 + 0.5, 3 - i / 4 + 0.5);
+        }
+    }
+
+    h->GetXaxis()->SetNdivisions(4);
+    h->GetYaxis()->SetNdivisions(4);
+    h->GetXaxis()->SetLabelSize(0);     // gli assi non hanno senso come numeri: ci sono le etichette
+    h->GetYaxis()->SetLabelSize(0);
+    h->SetMinimum(0);
+    h->SetMarkerSize(1.6);
+    c->cd();
+    h->Draw("COLZ TEXT");
+
+    // etichetta con il numero del pixel in ogni cella
+    for (int i = 0; i < NPIX; i++) {
+        TLatex *label = new TLatex(i % 4 + 0.5, 3 - i / 4 + 0.78,
+                                   Form("Pixel %d%s", i, IsCentralPx(i) ? " (int)" : ""));
+        label->SetTextAlign(22);
+        label->SetTextSize(0.025);
         label->SetTextColor(kBlack);
         label->Draw();
     }
@@ -736,13 +784,14 @@ void PlotOppositePairs(bool exclusive = true) {
 void cls_analysis() {
 
     bool   optWriteClusterTree = false;
-    bool   optDoMap            = false;
+    bool   optDoMap            = true;
+    bool   optDoMap16          = true;
     bool   optDoClusterCount   = false;
-    bool   optDoPerClusterSz   = true;
-    bool   optDoSeed           = true;
-    bool   optDoSegSelection   = true;
+    bool   optDoPerClusterSz   = false;
+    bool   optDoSeed           = false;
+    bool   optDoSegSelection   = false;
     bool   optDoCentroid       = false;
-    bool   optDoOpposite       = true;
+    bool   optDoOpposite       = false;
 
  
     if (!LoadData()) return;
@@ -750,6 +799,7 @@ void cls_analysis() {
     if (optWriteClusterTree) WriteClusterTree();
 
     if (optDoMap)          PlotMap();
+    if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoSeed)         PlotSeed(true, 50., 150);          // bool applyCut, double sigCut_min, double sigCut_max
