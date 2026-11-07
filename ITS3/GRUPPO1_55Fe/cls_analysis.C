@@ -11,6 +11,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <cmath>
 #include <TProfile.h>
 #include <TPad.h>
 
@@ -25,6 +26,11 @@ const int    NEXT = 12;
 const int    CEN_PX[NCEN] = {5, 6, 9, 10};
 const int    EXT_PX[NEXT] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
 const double NOHIT = -999.;     // baseline = NOHIT -> pixel spento
+const char  *DATAFILE = "data2.root";
+const double SEG_MAX = 300.;    // range istogrammi di "segnale" dei pixel esterni [ADC]
+double       SEG_THR = 10.;     // soglia sul segnale dei pixel esterni [ADC]: si usa solo segnale > SEG_THR
+double       SEG_MIN_PLOT = 10.;   // limite inferiore asse x dei segnali esterni
+double       SEG_MAX_PLOT = 100.;  // limite superiore asse x dei segnali esterni
 
 bool IsCentralPx(int px) {
     for (int k = 0; k < NCEN; k++) if (CEN_PX[k] == px) return true;
@@ -38,57 +44,99 @@ int CenIndex(int px) {          // posizione in CEN_PX, -1 se esterno
 // =====================================================================
 // CLASSE PIXEL: contiene tutti i dati di un pixel, evento per evento
 //   - centrali: baseline + signal
-//   - esterni:  p2p
+//   - esterni:  segnale (ampiezza), presente solo se sopra soglia
+// Dopo Expand() tutti i vettori hanno lunghezza nEv (indice = evento originale)
 // =====================================================================
 class Pixel {
     public:
     int  id      = -1;
     bool central = false;
-    bool hasBaseline = false, hasSignal = false, hasP2P = false;
-    
-    std::vector<double> baseline, signal, p2p;
-    
+    bool hasBaseline = false, hasSignal = false, hasSegnale = false;
+
+    std::vector<double> baseline, signal, segnale;
+    std::vector<char>   present;        // 1 se l'evento e' presente nel tree del pixel
+
+    Long64_t maxEv = 0;                 // (massimo indice evento + 1)
+
+    // dati grezzi come stanno nel tree (prima di Expand)
+    std::vector<Long64_t> evRaw;
+    std::vector<double>   bRaw, sRaw, gRaw;
+
     // legge il tree "pixelN" una sola volta; ritorna il numero di entries
     Long64_t Load(TFile *f, int pxId) {
         id      = pxId;
         central = IsCentralPx(pxId);
-        baseline.clear(); signal.clear(); p2p.clear();
-        
+        evRaw.clear(); bRaw.clear(); sRaw.clear(); gRaw.clear();
+
         TTree *t = (TTree*)f->Get(Form("pixel%d", id));
         if (!t) { std::cerr << "Manca il tree pixel" << id << std::endl; return 0; }
-        
-        double b = 0., s = 0., p = 0.;
+
+        double b = 0., s = 0., g = 0.;
+        Long64_t e = 0;
+        bool hasEvent = t->GetBranch("event") != nullptr;
         hasBaseline = t->GetBranch("baseline") != nullptr;
         hasSignal   = t->GetBranch("signal")   != nullptr;
-        hasP2P      = t->GetBranch("p2p")      != nullptr;
-        
+        hasSegnale  = t->GetBranch("segnale")  != nullptr;
+
+        if (hasEvent)    t->SetBranchAddress("event",    &e);
         if (hasBaseline) t->SetBranchAddress("baseline", &b);
         if (hasSignal)   t->SetBranchAddress("signal",   &s);
-        if (hasP2P)      t->SetBranchAddress("p2p",      &p);
-        
+        if (hasSegnale)  t->SetBranchAddress("segnale",  &g);
+
         Long64_t n = t->GetEntries();
-        if (hasBaseline) baseline.reserve(n);
-        if (hasSignal)   signal.reserve(n);
-        if (hasP2P)      p2p.reserve(n);
-        
+        evRaw.reserve(n);
+        if (hasBaseline) bRaw.reserve(n);
+        if (hasSignal)   sRaw.reserve(n);
+        if (hasSegnale)  gRaw.reserve(n);
+
+        maxEv = 0;
         for (Long64_t i = 0; i < n; i++) {
             t->GetEntry(i);
-            if (hasBaseline) baseline.push_back(b);
-            if (hasSignal)   signal.push_back(s);
-            if (hasP2P)      p2p.push_back(p);
+            Long64_t idx = hasEvent ? e : i;     // senza "event" si assume allineato
+            evRaw.push_back(idx);
+            maxEv = std::max(maxEv, idx + 1);
+            if (hasBaseline) bRaw.push_back(b);
+            if (hasSignal)   sRaw.push_back(s);
+            if (hasSegnale)  gRaw.push_back(g);
         }
-        t->ResetBranchAddresses();   // b, s, p sono variabili locali
+        t->ResetBranchAddresses();   // b, s, g, e sono variabili locali
         return n;
     }
-    
+
+    // porta i dati su vettori lunghi nEv (indice = evento originale)
+    void Expand(Long64_t nEv) {
+        baseline.assign(nEv, NOHIT);
+        signal.assign(nEv, 0.);
+        segnale.assign(nEv, 0.);
+        present.assign(nEv, 0);
+        for (size_t i = 0; i < evRaw.size(); i++) {
+            Long64_t ev = evRaw[i];
+            if (ev < 0 || ev >= nEv) continue;
+            present[ev] = 1;
+            if (hasBaseline) baseline[ev] = bRaw[i];
+            if (hasSignal)   signal[ev]   = sRaw[i];
+            if (hasSegnale)  segnale[ev]  = gRaw[i];
+        }
+        evRaw.clear(); bRaw.clear(); sRaw.clear(); gRaw.clear();
+    }
+
     // il pixel ha i dati che servono alle analisi?
-    bool Valid() const { return central ? (hasBaseline && hasSignal) : hasP2P; }
-    
-    // pixel acceso (solo centrali)
-    bool IsOn(Long64_t ev) const { return central && hasBaseline && baseline[ev] != NOHIT; }
-    
-    // grandezza "da mostrare": signal per i centrali, p2p per gli esterni
-    double Value(Long64_t ev) const { return central ? signal[ev] : p2p[ev]; }
+    bool Valid() const { return central ? (hasBaseline && hasSignal) : hasSegnale; }
+
+    // pixel centrale acceso
+    bool IsOn(Long64_t ev) const {
+        return central && hasBaseline && present[ev] && baseline[ev] != NOHIT;
+    }
+
+    // pixel esterno con segnale sopra soglia nell'evento
+    // bool Fired(Long64_t ev) const { return !central && hasSegnale && present[ev]; }
+    // pixel esterno con segnale sopra soglia nell'evento
+    bool Fired(Long64_t ev) const {
+        return !central && hasSegnale && present[ev] && segnale[ev] > SEG_THR;
+    }
+
+    // grandezza "da mostrare": signal per i centrali, segnale per gli esterni
+    double Value(Long64_t ev) const { return central ? signal[ev] : segnale[ev]; }
 };
 
 // =====================================================================
@@ -98,33 +146,33 @@ class Dataset {
     public:
     Pixel    px[NPIX];
     Long64_t nEv = 0;
-    
+
     // info di cluster (una entry per evento)
     std::vector<int>                csize;    // numero di pixel centrali accesi
     std::vector<std::array<int,4>>  on;       // on[ev][i] = 1 se CEN_PX[i] acceso
     std::vector<double>             totSig;   // segnale totale del cluster
-    
+
     bool Load(TFile *f) {
-        bool first = true;
+        bool any = false;
         for (int i = 0; i < NPIX; i++) {
             Long64_t n = px[i].Load(f, i);
             if (!px[i].Valid()) {
                 std::cerr << "Pixel " << i << ": dati mancanti, escluso dalle analisi" << std::endl;
                 continue;
             }
-            if (first) { nEv = n; first = false; }
-            else if (n != nEv) {
-                std::cerr << "Attenzione: pixel " << i << " ha " << n << " entries (altri: " << nEv
-                << "), uso il minimo" << std::endl;
-                nEv = std::min(nEv, n);
-            }
+            any = true;
+            nEv = std::max(nEv, px[i].maxEv);
+            std::cout << "Pixel " << i << ": " << n << " entries" << std::endl;
         }
-        if (first) { std::cerr << "Nessun pixel valido" << std::endl; return false; }
+        if (!any) { std::cerr << "Nessun pixel valido" << std::endl; return false; }
+
+        for (int i = 0; i < NPIX; i++) if (px[i].Valid()) px[i].Expand(nEv);
+
         std::cout << "Numero totale di eventi da analizzare: " << nEv << std::endl;
         BuildClusters();
         return true;
     }
-    
+
     void BuildClusters() {
         csize.assign(nEv, 0);
         on.assign(nEv, std::array<int,4>{0, 0, 0, 0});
@@ -140,7 +188,7 @@ class Dataset {
             }
         }
     }
-    
+
     // indice (0..3) dell'unico pixel centrale acceso, -1 se csize != 1
     int SeedIndex(Long64_t ev) const {
         if (csize[ev] != 1) return -1;
@@ -154,20 +202,20 @@ class Dataset {
 // OPZIONI (valori di default) E DATASET GLOBALE
 // =====================================================================
 Dataset d;                                  // dati letti una sola volta
-const bool   optWriteClusterTree = false;   
-const bool   optDoMap          = false;
-const bool   optDoClusterCount = false;
-const bool   optDoPerClusterSz = false;
-const bool   optDoSeed         = false;
-const bool   optDoP2PSelection = false;
-const bool   optDoCentroid = false;
-const bool   optDoOpposite = true;
+bool   optWriteClusterTree = false;
+bool   optDoMap            = false;
+bool   optDoClusterCount   = false;
+bool   optDoPerClusterSz   = false;
+bool   optDoSeed           = false;
+bool   optDoSegSelection   = false;
+bool   optDoCentroid       = false;
+bool   optDoOpposite       = false;
 
-// legge data.root una sola volta (le funzioni Plot* lo chiamano da sole se i dati non ci sono)
+// legge data2.root una sola volta (le funzioni Plot* lo chiamano da sole se i dati non ci sono)
 bool LoadData() {
     if (d.nEv > 0) return true;               // gia' caricato
-    TFile *f = TFile::Open("data.root", "READ");
-    if (!f || f->IsZombie()) { std::cerr << "Impossibile aprire data.root" << std::endl; return false; }
+    TFile *f = TFile::Open(DATAFILE, "READ");
+    if (!f || f->IsZombie()) { std::cerr << "Impossibile aprire " << DATAFILE << std::endl; return false; }
     bool ok = d.Load(f);
     f->Close();   // da qui in poi si lavora solo sui dati in memoria
     return ok;
@@ -177,7 +225,7 @@ bool LoadData() {
 // FUNZIONI DI SUPPORTO (istogrammi per tutti i 16 pixel)
 // =====================================================================
 
-// crea un istogramma per ogni pixel valido: signal [0,100] per i centrali, p2p [0,8.5] per gli esterni
+// crea un istogramma per ogni pixel valido: signal [0,100] per i centrali, segnale [0,SEG_MAX] per gli esterni
 void MakeHists16(const char *name, const char *title, TH1D *h[NPIX]) {
     for (int i = 0; i < NPIX; i++) {
         h[i] = nullptr;
@@ -187,17 +235,18 @@ void MakeHists16(const char *name, const char *title, TH1D *h[NPIX]) {
                             Form("Pixel %d (%s);signal [SCOPE];Eventi", i, title), 100, 0, 100);
         else
             h[i] = new TH1D(Form("%s_pixel%d", name, i),
-                            Form("Pixel %d (%s);P2P [ADC];Eventi", i, title), 40, 0, 8.5);
+                            Form("Pixel %d (%s);Segnale [ADC];Eventi", i, title), 30, SEG_MIN_PLOT, SEG_MAX_PLOT);
         h[i]->SetDirectory(nullptr);
     }
 }
 
 // riempie gli istogrammi con i valori dell'evento ev:
-// esterni sempre (p2p), centrali solo se accesi (signal)
+// esterni solo se sopra soglia (segnale), centrali solo se accesi (signal)
 void FillEvent16(Long64_t ev, TH1D *h[NPIX]) {
     for (int i = 0; i < NPIX; i++) {
         if (!h[i]) continue;
-        if (d.px[i].central && !d.px[i].IsOn(ev)) continue;
+        if (d.px[i].central) { if (!d.px[i].IsOn(ev)) continue; }
+        else                 { if (!d.px[i].Fired(ev)) continue; }
         h[i]->Fill(d.px[i].Value(ev));
     }
 }
@@ -324,7 +373,7 @@ void PlotPerClusterSize() {
     TH1D    *h[NCEN][NPIX];
     for (int s = 0; s < NCEN; s++) {
         cCS[s] = new TCanvas(Form("cCS%d", s + 1),
-                             Form("P2P / Signal - %d pixel interni accesi", s + 1), 1200, 800);
+                             Form("Segnale - %d pixel interni accesi", s + 1), 1200, 800);
         cCS[s]->Divide(4, 4);
         MakeHists16(Form("h_cs_s%d", s + 1), Form("cluster size = %d", s + 1), h[s]);
     }
@@ -338,7 +387,7 @@ void PlotPerClusterSize() {
 
 // =====================================================================
 // ANALISI 4: cluster size = 1, per ogni pixel centrale come seed.
-// Taglio opzionale: signal del pixel acceso > sigCut
+// Taglio opzionale: signal del pixel acceso in [sigCut_min, sigCut_max]
 // =====================================================================
 void PlotSeed(bool applyCut = true, double sigCut_min = 0., double sigCut_max = 150.) {
     if (!LoadData()) return;
@@ -380,9 +429,10 @@ void PlotSeed(bool applyCut = true, double sigCut_min = 0., double sigCut_max = 
 }
 
 // =====================================================================
-// ANALISI 5: eventi in cui il p2p di un pixel ESTERNO (selPx) e' in [p2pMin, p2pMax]
+// ANALISI 5: eventi in cui il segnale di un pixel ESTERNO (selPx) e' in [segMin, segMax]
+// (il pixel deve essere presente, cioe' sopra soglia)
 // =====================================================================
-void PlotP2PSelection(int selPx = 0, double p2pMin = 1.0, double p2pMax = 3.0) {
+void PlotSegnaleSelection(int selPx = 0, double segMin = 60., double segMax = 150.) {
     if (!LoadData()) return;
 
     if (selPx < 0 || selPx >= NPIX || IsCentralPx(selPx) || !d.px[selPx].Valid()) {
@@ -390,8 +440,8 @@ void PlotP2PSelection(int selPx = 0, double p2pMin = 1.0, double p2pMax = 3.0) {
         return;
     }
 
-    TString selTitle = Form("p2p pixel %d in [%g, %g]", selPx, p2pMin, p2pMax);
-    TString selName  = Form("_sel%d_p2p_%g_%g", selPx, p2pMin, p2pMax);
+    TString selTitle = Form("segnale pixel %d in [%g, %g]", selPx, segMin, segMax);
+    TString selName  = Form("_sel%d_seg_%g_%g", selPx, segMin, segMax);
     selName.ReplaceAll(".", "p");
     selName.ReplaceAll("-", "m");
 
@@ -402,8 +452,9 @@ void PlotP2PSelection(int selPx = 0, double p2pMin = 1.0, double p2pMax = 3.0) {
 
     int nSel = 0;
     for (Long64_t ev = 0; ev < d.nEv; ev++) {
-        double p = d.px[selPx].p2p[ev];
-        if (p < p2pMin || p > p2pMax) continue;
+        if (!d.px[selPx].Fired(ev)) continue;
+        double g = d.px[selPx].segnale[ev];
+        if (g < segMin || g > segMax) continue;
         nSel++;
         FillEvent16(ev, h);
     }
@@ -412,12 +463,12 @@ void PlotP2PSelection(int selPx = 0, double p2pMin = 1.0, double p2pMax = 3.0) {
 }
 
 // =====================================================================
-// SCRITTURA DEL TREE "cluster" in data.root (dai dati gia' in memoria)
+// SCRITTURA DEL TREE "cluster" in data2.root (dai dati gia' in memoria)
 // =====================================================================
 void WriteClusterTree() {
     if (!LoadData()) return;
-    TFile *f = TFile::Open("data.root", "UPDATE");
-    if (!f || f->IsZombie()) { std::cerr << "Impossibile aprire data.root in UPDATE" << std::endl; return; }
+    TFile *f = TFile::Open(DATAFILE, "UPDATE");
+    if (!f || f->IsZombie()) { std::cerr << "Impossibile aprire " << DATAFILE << " in UPDATE" << std::endl; return; }
     f->cd();
     TTree *t = new TTree("cluster", "Cluster dei pixel interni");
 
@@ -443,8 +494,9 @@ void WriteClusterTree() {
     t->Write("", TObject::kOverwrite);
     f->Close();
 }
+
 // =====================================================================
-// COSTANTI DA AGGIUNGERE IN ALTO (dopo le altre costanti / opzioni)
+// COSTANTI GEOMETRIA
 // =====================================================================
 const double PITCH = 10.;                   // [micron] dimensione del pixel 20x20
 const int    centroidSelPx = 0;             // pixel esterno da studiare
@@ -452,7 +504,7 @@ const int    centroidSelPx = 0;             // pixel esterno da studiare
 // =====================================================================
 // ANALISI 6: segnale dei pixel interni quando si considera un evento
 //   del pixel esterno selPx, in funzione della distanza (geometria 4x4)
-//   Eventi selezionati: p2p di selPx in [p2pMin, p2pMax]
+//   Eventi selezionati: segnale di selPx in [segMin, segMax]
 //   Tutto in un unico canvas: griglia 4x4 (pad = posizione del pixel)
 //   + due riepiloghi a destra. Distanze in micron.
 // =====================================================================
@@ -480,7 +532,7 @@ bool Centroid(Long64_t ev, double &cx, double &cy) {
     return true;
 }
 
-void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
+void PlotCentroid(int selPx = 0, double segMin = 0., double segMax = 1e9) {
     if (!LoadData()) return;
 
     if (selPx < 0 || selPx >= NPIX || IsCentralPx(selPx) || !d.px[selPx].Valid()) {
@@ -488,7 +540,7 @@ void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
         return;
     }
 
-    const double dMax   = 4.5 * PITCH;   // 0 - 90 um
+    const double dMax   = 4.5 * PITCH;   // 0 - 45 um
     const double sMax   = 300.;          // range segnale totale
     const double sMaxPx = 100.;          // range segnale singolo pixel
 
@@ -517,16 +569,17 @@ void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
         hEach[k]->SetDirectory(nullptr);
     }
 
-    // p2p del pixel selezionato (eventi scelti)
-    TH1D *hSel = new TH1D(Form("h_selP2P_%d", selPx),
-                          Form("Pixel %d: P2P;P2P [ADC];Eventi", selPx), 40, 0, 8.5);
+    // segnale del pixel selezionato (eventi scelti)
+    TH1D *hSel = new TH1D(Form("h_selSeg_%d", selPx),
+                      Form("Pixel %d: segnale;Segnale [ADC];Eventi", selPx), 30, SEG_MIN_PLOT, SEG_MAX_PLOT);
     hSel->SetDirectory(nullptr);
 
     // ---- riempimento ----
     int nUsed = 0;
     for (Long64_t ev = 0; ev < d.nEv; ev++) {
-        double p0 = d.px[selPx].p2p[ev];
-        if (p0 < p2pMin || p0 > p2pMax) continue;
+        if (!d.px[selPx].Fired(ev)) continue;
+        double g0 = d.px[selPx].segnale[ev];
+        if (g0 < segMin || g0 > segMax) continue;
 
         double cx, cy;
         if (!Centroid(ev, cx, cy)) continue;
@@ -536,7 +589,7 @@ void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
         double dy = cy - PxY(selPx);
         double distC = std::sqrt(dx*dx + dy*dy);
 
-        hSel->Fill(p0);
+        hSel->Fill(g0);
         hTot->Fill(distC, d.totSig[ev]);
 
         for (int k = 0; k < NCEN; k++) {
@@ -546,7 +599,7 @@ void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
             hEach[k]->Fill(distC, s);
         }
     }
-    std::cout << "Eventi con p2p pixel " << selPx << " in [" << p2pMin << ", " << p2pMax
+    std::cout << "Eventi con segnale pixel " << selPx << " in [" << segMin << ", " << segMax
               << "] e centroide definito: " << nUsed << std::endl;
 
     // ---- canvas unico ----
@@ -580,7 +633,7 @@ void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
             hEach[k]->GetYaxis()->SetTitleOffset(1.2);
             hEach[k]->Draw("COLZ");
         } else if (id == selPx) {
-            // pixel selezionato: distribuzione p2p
+            // pixel selezionato: distribuzione del segnale
             pad->SetFillColor(kYellow - 9);
             hSel->GetXaxis()->SetLabelSize(0.06);
             hSel->GetYaxis()->SetLabelSize(0.06);
@@ -633,7 +686,7 @@ void PlotCentroid(int selPx = 0, double p2pMin = 0., double p2pMax = 1e9) {
 //                        gli altri due centrali spenti
 //   exclusive = false -> basta che i due pixel della coppia siano accesi
 //                        (gli altri centrali possono essere accesi o no)
-//   Un canvas 4x4 per coppia, con signal (centrali) / p2p (esterni)
+//   Un canvas 4x4 per coppia, con signal (centrali) / segnale (esterni)
 //   di tutti i 16 pixel.
 // =====================================================================
 void PlotOppositePairs(bool exclusive = true) {
@@ -681,6 +734,17 @@ void PlotOppositePairs(bool exclusive = true) {
 // (le singole funzioni si possono richiamare da ROOT anche con altri argomenti)
 // =====================================================================
 void cls_analysis() {
+
+    bool   optWriteClusterTree = false;
+    bool   optDoMap            = false;
+    bool   optDoClusterCount   = false;
+    bool   optDoPerClusterSz   = true;
+    bool   optDoSeed           = true;
+    bool   optDoSegSelection   = true;
+    bool   optDoCentroid       = false;
+    bool   optDoOpposite       = true;
+
+ 
     if (!LoadData()) return;
 
     if (optWriteClusterTree) WriteClusterTree();
@@ -688,9 +752,8 @@ void cls_analysis() {
     if (optDoMap)          PlotMap();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoPerClusterSz) PlotPerClusterSize();
-    if (optDoSeed)         PlotSeed(true, 50., 150);    //bool applyCut = true, double sigCut_min = 0., double sigCut_max = 150.
-    if (optDoP2PSelection) PlotP2PSelection(0, 5.5, 6); // pixel esterno 4, range [2, 5]
-    if (optDoCentroid)     PlotCentroid(centroidSelPx, 0., 8.5);   // eventi con p2p pixel 0 in range [xmin, xmax]
-    if (optDoOpposite)     PlotOppositePairs(true);   // true = solo i due pixel opposti accesi
-
+    if (optDoSeed)         PlotSeed(true, 50., 150);          // bool applyCut, double sigCut_min, double sigCut_max
+    if (optDoSegSelection) PlotSegnaleSelection(0, 0., 150.); // pixel esterno 0, segnale in [60, 150]
+    if (optDoCentroid)     PlotCentroid(centroidSelPx, 0., 1e9); // eventi con segnale pixel 0 in [min, max]
+    if (optDoOpposite)     PlotOppositePairs(true);           // true = solo i due pixel opposti accesi
 }
