@@ -330,13 +330,14 @@ void PlotClusterCount() {
 
     // ---- istogramma numero di pixel accesi ----
     TCanvas *c2 = new TCanvas("c2", "Cluster Count", 800, 600);
-    TH1D *h_cluster = new TH1D("h_cluster", "Numero di pixel accesi per evento;Pixel;Conteggi",
+    TH1D *h_cluster = new TH1D("h_cluster", "Numero di pixel accesi per evento;Cluster Size;Conteggi",
                                5, -0.5, 4.5);
     h_cluster->SetDirectory(nullptr);
     for (int k = 0; k <= NCEN; k++) h_cluster->GetXaxis()->SetBinLabel(k + 1, Form("%d", k));
     for (Long64_t ev = 0; ev < d.nEv; ev++) h_cluster->Fill(d.csize[ev]);
     c2->cd();
-    h_cluster->Draw();
+    h_cluster->SetMarkerSize(1.5);
+    h_cluster->Draw("HIST TEXT0");
     c2->Modified();
     c2->Update();
     c2->SaveAs("plots/pixel_on_per_event.pdf");
@@ -383,6 +384,88 @@ void PlotClusterCount() {
     c8->Modified();
     c8->Update();
     c8->SaveAs("plots/overlay_sign_vs_clsize.pdf");
+}
+
+// =====================================================================
+// ANALISI 2b: cluster size "completa" su tutti i 16 pixel
+//   centrali: acceso (baseline != NOHIT)
+//   esterni : segnale > SEG_THR
+//   Produce l'istogramma del numero di pixel colpiti per evento (0..16)
+//   e, opzionalmente, il segnale totale (centrali: signal, esterni: segnale)
+//   per ogni cluster size.
+// =====================================================================
+void PlotClusterCountFull(bool plotSignal = false) {
+    if (!LoadData()) return;
+
+    // ---- calcolo cluster size completa ----
+    std::vector<int>    csizeFull(d.nEv, 0);
+    std::vector<double> totFull(d.nEv, 0.);
+
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        for (int i = 0; i < NPIX; i++) {
+            if (!d.px[i].Valid()) continue;
+            bool hit = d.px[i].central ? d.px[i].IsOn(ev) : d.px[i].Fired(ev);
+            if (!hit) continue;
+            csizeFull[ev]++;
+            totFull[ev] += d.px[i].Value(ev);
+        }
+    }
+
+    // ---- conteggi ----
+    std::vector<int> count(NPIX + 1, 0);
+    for (Long64_t ev = 0; ev < d.nEv; ev++) count[csizeFull[ev]]++;
+
+    for (int k = 1; k <= NPIX; k++)
+        if (count[k] > 0)
+            std::cout << "Numero di eventi con cluster size " << k << ": " << count[k] << std::endl;
+    std::cout << "Numero di eventi senza pixel colpiti: " << count[0] << std::endl;
+    std::cout << "Numero di eventi con cluster (esterni sopra soglia " << SEG_THR << "): "
+              << (d.nEv - count[0]) << std::endl;
+
+    // ---- istogramma cluster size ----
+    int kMax = 0;
+    for (int k = NPIX; k >= 0; k--) if (count[k] > 0) { kMax = k; break; }
+
+    TCanvas *c = new TCanvas("c2_full", "Cluster Count (16 pixel)", 900, 600);
+    TH1D *h = new TH1D("h_cluster_full",
+                       Form("Numero di pixel colpiti per evento (centrali accesi + esterni con segnale > %g);Pixel;Conteggi", SEG_THR),
+                       kMax + 1, -0.5, kMax + 0.5);
+    h->SetDirectory(nullptr);
+    for (int k = 0; k <= kMax; k++) h->GetXaxis()->SetBinLabel(k + 1, Form("%d", k));
+    for (Long64_t ev = 0; ev < d.nEv; ev++) h->Fill(csizeFull[ev]);
+
+    h->SetMaximum(1.15 * h->GetMaximum());    // spazio per i numeri sopra i bin
+
+    c->cd();
+    h->SetMarkerSize(1.5);
+    h->Draw("HIST TEXT0");                    // stile ROOT di default + conteggio sopra ogni bin
+    c->Modified();
+    c->Update();
+    c->SaveAs("plots/pixel_on_per_event_full.pdf");
+
+    if (!plotSignal) return;
+
+    // ---- segnale totale per cluster size (raggruppato: 1,2,3,4,5,6+) ----
+    const int NG = 6;
+    TCanvas *c2 = new TCanvas("c2_full_sig", "Segnale totale vs cluster size (16 pixel)", 1200, 900);
+    c2->Divide(3, 2);
+    TH1D *hs[NG];
+    for (int k = 0; k < NG; k++) {
+        TString lab = (k < NG - 1) ? Form("= %d", k + 1) : Form(">= %d", k + 1);
+        hs[k] = new TH1D(Form("h_signal_full_%d", k + 1),
+                         Form("Segnale totale per cluster size %s;Segnale;Conteggi", lab.Data()),
+                         100, 0, 300);
+        hs[k]->SetDirectory(nullptr);
+    }
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        int cs = csizeFull[ev];
+        if (cs < 1) continue;
+        hs[std::min(cs, NG) - 1]->Fill(totFull[ev]);
+    }
+    for (int k = 0; k < NG; k++) { c2->cd(k + 1); hs[k]->Draw(); }
+    c2->Modified();
+    c2->Update();
+    c2->SaveAs("plots/signtot_per_cls_full.pdf");
 }
 
 // =====================================================================
@@ -584,24 +667,23 @@ void PlotOppositePairs() {
 void cls_analysis() {
 
     bool   optWriteClusterTree = false;
-
-    bool   optDoMap16          = false;      // mostra i conteggi di tutti i pixel 4x4
-    bool   optDoClusterCount   = false;      // hist dimensione cls (2x2) + segnale sui cls
-    bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
-    bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
-    
-    
     if (!LoadData()) return;
-    
     //if (optWriteClusterTree) WriteClusterTree();
     bool   optDoSeed           = false;      // check what happen selezionando un range nei pixel interni
     bool   optDoSegSelection   = false;      // check what happen selezionando un range nei pixel esterni
     if (optDoSeed)         PlotSeed(true, 50., 150);          // bool applyCut, double sigCut_min, double sigCut_max
     if (optDoSegSelection) PlotSegnaleSelection(0, 0., 150.); // pixel esterno 0, segnale in [60, 150]
 
+
+    bool   optDoMap16          = false;      // mostra i conteggi di tutti i pixel 4x4
+    bool   optDoClusterCount   = false;      // hist dimensione cls (2x2) + segnale sui cls
+    bool   optDoClusterCountFull = true;     // cluster size su tutti i 16 pixel
+    bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
+    bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
     
     if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
+    if (optDoClusterCountFull) PlotClusterCountFull(false);   // true -> anche segnale totale
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoOpposite)     PlotOppositePairs();
 }
