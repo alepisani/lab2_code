@@ -29,7 +29,7 @@ const int    EXT_PX[NEXT] = {0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15};
 const double NOHIT = -999.;     // baseline = NOHIT -> pixel spento
 const char  *DATAFILE = "data2.root";
 const double SEG_MAX = 300.;    // range istogrammi di "segnale" dei pixel esterni [ADC]
-double       SEG_THR = 10.;     // soglia sul segnale dei pixel esterni [ADC]: si usa solo segnale > SEG_THR
+double       SEG_THR = 8.;     // soglia sul segnale dei pixel esterni [ADC]: si usa solo segnale > SEG_THR
 double       SEG_MIN_PLOT = 10.;   // limite inferiore asse x dei segnali esterni
 double       SEG_MAX_PLOT = 100.;  // limite superiore asse x dei segnali esterni
 
@@ -233,10 +233,10 @@ void MakeHists16(const char *name, const char *title, TH1D *h[NPIX]) {
         if (!d.px[i].Valid()) continue;
         if (d.px[i].central)
             h[i] = new TH1D(Form("%s_pixel%d", name, i),
-                            Form("Pixel %d (%s);signal [SCOPE];Eventi", i, title), 100, 0, 100);
+                            Form("Pixel %d (%s);signal [SCOPE];Eventi", i, title), 50, 0, 100);
         else
             h[i] = new TH1D(Form("%s_pixel%d", name, i),
-                            Form("Pixel %d (%s);Segnale [ADC];Eventi", i, title), 30, SEG_MIN_PLOT, SEG_MAX_PLOT);
+                            Form("Pixel %d (%s);Segnale [ADC];Eventi", i, title), 50, 0, 100);
         h[i]->SetDirectory(nullptr);
     }
 }
@@ -311,6 +311,7 @@ void PlotMap16() {
     c->Modified();
     c->Update();
     c->SaveAs("plots/mappa_4x4.pdf");
+    c->SaveAs("plots/mappa_4x4.tex");
 }
 
 // =====================================================================
@@ -341,6 +342,7 @@ void PlotClusterCount() {
     c2->Modified();
     c2->Update();
     c2->SaveAs("plots/pixel_on_per_event.pdf");
+    c2->SaveAs("plots/pixel_on_per_event.tex");
 
     // ---- segnale totale per cluster size (4 pad) ----
     TCanvas *c4 = new TCanvas("c4", "Signal vs Cluster Size (1D)", 1200, 900);
@@ -357,6 +359,7 @@ void PlotClusterCount() {
     c4->Modified();
     c4->Update();
     c4->SaveAs("plots/signtot_per_cls.pdf");
+    c4->SaveAs("plots/signtot_per_cls.tex");
 
     // ---- sovrapposizione normalizzata ----
     TCanvas *c8 = new TCanvas("c8", "Segnale vs Dimensione del Cluster", 800, 600);
@@ -384,6 +387,7 @@ void PlotClusterCount() {
     c8->Modified();
     c8->Update();
     c8->SaveAs("plots/overlay_sign_vs_clsize.pdf");
+    c8->SaveAs("plots/overlay_sign_vs_clsize.tex");
 }
 
 // =====================================================================
@@ -442,6 +446,7 @@ void PlotClusterCountFull(bool plotSignal = false) {
     c->Modified();
     c->Update();
     c->SaveAs("plots/pixel_on_per_event_full.pdf");
+    c->SaveAs("plots/pixel_on_per_event_full.tex");
 
     if (!plotSignal) return;
 
@@ -466,6 +471,7 @@ void PlotClusterCountFull(bool plotSignal = false) {
     c2->Modified();
     c2->Update();
     c2->SaveAs("plots/signtot_per_cls_full.pdf");
+    c2->SaveAs("plots/signtot_per_cls_full.tex");
 }
 
 // =====================================================================
@@ -489,6 +495,7 @@ void PlotPerClusterSize() {
     for (int s = 0; s < NCEN; s++) {
         Draw16(cCS[s], h[s]);
         cCS[s]->SaveAs(Form("plots/segnale_clusize_%d.pdf", s + 1));   
+        cCS[s]->SaveAs(Form("plots/segnale_clusize_%d.tex", s + 1));   
     }
     
 }
@@ -656,8 +663,37 @@ void PlotOppositePairs() {
                   << " accesi" << (exclusive ? " (solo questi)" : "") << ": " << nSel[p] << std::endl;
         Draw16(c[p], h[p]);
         c[p]->Update();
-        c[p]->SaveAs(Form("plots/opposti_%d_%d.pdf", pa, pb));       
+        c[p]->SaveAs(Form("plots/opposti_%d_%d.pdf", pa, pb));      
+        c[p]->SaveAs(Form("plots/opposti_%d_%d.tex", pa, pb));       
     }
+}
+
+// =====================================================================
+// ANALISI 7: segnali di tutti i 16 pixel su tutti gli eventi (nessuna selezione)
+//   centrali: signal, solo se il pixel e' acceso
+//   esterni : segnale, solo se > SEG_THR
+// =====================================================================
+void PlotAllSignals(bool logY = false) {
+    if (!LoadData()) return;
+
+    TCanvas *c = new TCanvas("c_all_signals", "Segnali di tutti i pixel", 1600, 1200);
+    c->Divide(4, 4);
+
+    TH1D *h[NPIX];
+    MakeHists16("h_all", "tutti gli eventi", h);
+
+    for (Long64_t ev = 0; ev < d.nEv; ev++) FillEvent16(ev, h);
+
+    Draw16(c, h);
+
+    if (logY) {
+        for (int i = 0; i < NPIX; i++) c->cd(i + 1)->SetLogy();
+        c->Modified();
+        c->Update();
+    }
+
+    c->SaveAs("plots/signal_all.pdf");
+    c->SaveAs("plots/signal_all.tex");
 }
 
 // =====================================================================
@@ -665,6 +701,7 @@ void PlotOppositePairs() {
 // (le singole funzioni si possono richiamare da ROOT anche con altri argomenti)
 // =====================================================================
 void cls_analysis() {
+    gStyle->SetLineScalePS(1);
 
     bool   optWriteClusterTree = false;
     if (!LoadData()) return;
@@ -675,15 +712,19 @@ void cls_analysis() {
     if (optDoSegSelection) PlotSegnaleSelection(0, 0., 150.); // pixel esterno 0, segnale in [60, 150]
 
 
-    bool   optDoMap16          = false;      // mostra i conteggi di tutti i pixel 4x4
-    bool   optDoClusterCount   = false;      // hist dimensione cls (2x2) + segnale sui cls
+    bool   optDoMap16          = true;      // mostra i conteggi di tutti i pixel 4x4
+    bool   optDoClusterCount   = true;      // hist dimensione cls (2x2) + segnale sui cls
     bool   optDoClusterCountFull = true;     // cluster size su tutti i 16 pixel
-    bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
-    bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
+    bool   optDoPerClusterSz   = true;      // segnale 16pixel divisi per cluster size (dei pixel interni)
+    bool   optDoOpposite       = true;      // check eventi in cui pixel interni opposti si accendono
+    bool   optDoAllSignals     = true;       // segnali dei 16 pixel su tutti gli eventi
     
     if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoClusterCountFull) PlotClusterCountFull(false);   // true -> anche segnale totale
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoOpposite)     PlotOppositePairs();
+    if (optDoAllSignals)   PlotAllSignals();   // true -> asse y logaritmico
+
+    
 }

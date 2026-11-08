@@ -1,0 +1,143 @@
+%\documentclass{standalone}
+%\usepackage{tikz}
+%\usetikzlibrary{patterns,plotmarks}
+%\begin{document}
+\begin{tikzpicture}
+\def\CheckTikzLibraryLoaded#1{ \ifcsname tikz@library@#1@loaded\endcsname \else \PackageWarning{tikz}{usetikzlibrary{#1} is missing in the preamble.} \fi }
+\CheckTikzLibraryLoaded{patterns}
+\CheckTikzLibraryLoaded{plotmarks}
+\pgfdeclareplotmark{cross} {
+\pgfpathmoveto{\pgfpoint{-0.3\pgfplotmarksize}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+1\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+1\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{-1.\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-0.3\pgfplotmarksize}{-1.\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-0.3\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-1.\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-1.\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-0.3\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathclose
+\pgfusepathqstroke
+}
+\pgfdeclareplotmark{cross*} {
+\pgfpathmoveto{\pgfpoint{-0.3\pgfplotmarksize}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+1\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+1\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{+0.3\pgfplotmarksize}{-1.\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-0.3\pgfplotmarksize}{-1.\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-0.3\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-1.\pgfplotmarksize}{-0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-1.\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathlineto{\pgfpoint{-0.3\pgfplotmarksize}{0.3\pgfplotmarksize}}
+\pgfpathclose
+\pgfusepathqfillstroke
+}
+\pgfdeclareplotmark{newstar} {
+\pgfpathmoveto{\pgfqpoint{0pt}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{44}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{18}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{-20}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{-54}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{-90}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{234}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{198}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{162}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{134}{0.5\pgfplotmarksize}}
+\pgfpathclose
+\pgfusepathqstroke
+}
+\pgfdeclareplotmark{newstar*} {
+\pgfpathmoveto{\pgfqpoint{0pt}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{44}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{18}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{-20}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{-54}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{-90}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{234}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{198}{0.5\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{162}{\pgfplotmarksize}}
+\pgfpathlineto{\pgfqpointpolar{134}{0.5\pgfplotmarksize}}
+\pgfpathclose
+\pgfusepathqfillstroke
+}
+\definecolor{c}{rgb}{1,1,1};
+\draw [color=c, fill=c] (0,0) rectangle (20,14.411);
+\draw [color=c, fill=c] (2,1.4411) rectangle (18,12.9699);
+\definecolor{c}{rgb}{0,0,0};
+\draw [c,line width=0.3] (2,1.4411) -- (2,12.9699) -- (18,12.9699) -- (18,1.4411) -- (2,1.4411);
+\definecolor{c}{rgb}{1,1,1};
+\draw [color=c, fill=c] (2,1.4411) rectangle (18,12.9699);
+\definecolor{c}{rgb}{0,0,0};
+\draw [c,line width=0.3] (2,1.4411) -- (2,12.9699) -- (18,12.9699) -- (18,1.4411) -- (2,1.4411);
+\definecolor{c}{rgb}{0,0,0.6};
+\draw [c,line width=0.3] (2,1.93407) -- (5.2,1.93407) -- (5.2,12.4209) -- (8.4,12.4209) -- (8.4,6.88554) -- (11.6,6.88554) -- (11.6,2.05594) -- (14.8,2.05594) -- (14.8,2.10142) -- (18,2.10142);
+\definecolor{c}{rgb}{0,0,0};
+\draw [anchor=base] (3.6,1.99171) node[scale=0.946278, color=c, rotate=0]{271};
+\draw [anchor=base] (6.8,12.4786) node[scale=0.946278, color=c, rotate=0]{6036};
+\draw [anchor=base] (10,6.94319) node[scale=0.946278, color=c, rotate=0]{2993};
+\draw [anchor=base] (13.2,2.11359) node[scale=0.946278, color=c, rotate=0]{338};
+\draw [anchor=base] (16.4,2.15906) node[scale=0.946278, color=c, rotate=0]{363};
+\draw [c,line width=0.3] (2,1.4411) -- (18,1.4411);
+\draw [anchor=north] (3.6,1.26817) node[scale=0.723624, color=c, rotate=0]{0};
+\draw [anchor=north] (6.8,1.26817) node[scale=0.723624, color=c, rotate=0]{1};
+\draw [anchor=north] (10,1.26817) node[scale=0.723624, color=c, rotate=0]{2};
+\draw [anchor=north] (13.2,1.26817) node[scale=0.723624, color=c, rotate=0]{3};
+\draw [anchor=north] (16.4,1.26817) node[scale=0.723624, color=c, rotate=0]{4};
+\draw [c,line width=0.3] (2,1.78697) -- (2,1.4411);
+\draw [c,line width=0.3] (5.2,1.78697) -- (5.2,1.4411);
+\draw [c,line width=0.3] (8.4,1.78697) -- (8.4,1.4411);
+\draw [c,line width=0.3] (11.6,1.78697) -- (11.6,1.4411);
+\draw [c,line width=0.3] (14.8,1.78697) -- (14.8,1.4411);
+\draw [c,line width=0.3] (18,1.78697) -- (18,1.4411);
+\draw [anchor= east] (18,0.634085) node[scale=1.11327, color=c, rotate=0]{Cluster Size};
+\draw [c,line width=0.3] (2,1.4411) -- (2,12.9699);
+\draw [c,line width=0.3] (2.48,1.4411) -- (2,1.4411);
+\draw [c,line width=0.3] (2.24,1.80491) -- (2,1.80491);
+\draw [c,line width=0.3] (2.24,2.16873) -- (2,2.16873);
+\draw [c,line width=0.3] (2.24,2.53254) -- (2,2.53254);
+\draw [c,line width=0.3] (2.24,2.89635) -- (2,2.89635);
+\draw [c,line width=0.3] (2.48,3.26016) -- (2,3.26016);
+\draw [c,line width=0.3] (2.24,3.62397) -- (2,3.62397);
+\draw [c,line width=0.3] (2.24,3.98778) -- (2,3.98778);
+\draw [c,line width=0.3] (2.24,4.35159) -- (2,4.35159);
+\draw [c,line width=0.3] (2.24,4.71541) -- (2,4.71541);
+\draw [c,line width=0.3] (2.48,5.07922) -- (2,5.07922);
+\draw [c,line width=0.3] (2.24,5.44303) -- (2,5.44303);
+\draw [c,line width=0.3] (2.24,5.80684) -- (2,5.80684);
+\draw [c,line width=0.3] (2.24,6.17065) -- (2,6.17065);
+\draw [c,line width=0.3] (2.24,6.53446) -- (2,6.53446);
+\draw [c,line width=0.3] (2.48,6.89828) -- (2,6.89828);
+\draw [c,line width=0.3] (2.24,7.26209) -- (2,7.26209);
+\draw [c,line width=0.3] (2.24,7.6259) -- (2,7.6259);
+\draw [c,line width=0.3] (2.24,7.98971) -- (2,7.98971);
+\draw [c,line width=0.3] (2.24,8.35352) -- (2,8.35352);
+\draw [c,line width=0.3] (2.48,8.71733) -- (2,8.71733);
+\draw [c,line width=0.3] (2.24,9.08114) -- (2,9.08114);
+\draw [c,line width=0.3] (2.24,9.44496) -- (2,9.44496);
+\draw [c,line width=0.3] (2.24,9.80877) -- (2,9.80877);
+\draw [c,line width=0.3] (2.24,10.1726) -- (2,10.1726);
+\draw [c,line width=0.3] (2.48,10.5364) -- (2,10.5364);
+\draw [c,line width=0.3] (2.24,10.9002) -- (2,10.9002);
+\draw [c,line width=0.3] (2.24,11.264) -- (2,11.264);
+\draw [c,line width=0.3] (2.24,11.6278) -- (2,11.6278);
+\draw [c,line width=0.3] (2.24,11.9916) -- (2,11.9916);
+\draw [c,line width=0.3] (2.48,12.3554) -- (2,12.3554);
+\draw [c,line width=0.3] (2.48,12.3554) -- (2,12.3554);
+\draw [c,line width=0.3] (2.24,12.7193) -- (2,12.7193);
+\draw [anchor= east] (1.9,1.4411) node[scale=1.11327, color=c, rotate=0]{0};
+\draw [anchor= east] (1.9,3.26016) node[scale=1.11327, color=c, rotate=0]{1000};
+\draw [anchor= east] (1.9,5.07922) node[scale=1.11327, color=c, rotate=0]{2000};
+\draw [anchor= east] (1.9,6.89828) node[scale=1.11327, color=c, rotate=0]{3000};
+\draw [anchor= east] (1.9,8.71733) node[scale=1.11327, color=c, rotate=0]{4000};
+\draw [anchor= east] (1.9,10.5364) node[scale=1.11327, color=c, rotate=0]{5000};
+\draw [anchor= east] (1.9,12.3554) node[scale=1.11327, color=c, rotate=0]{6000};
+\draw [anchor= east] (0.297494,12.9699) node[scale=1.11327, color=c, rotate=90]{Conteggi};
+\draw (10,13.9179) node[scale=1.61424, color=c, rotate=0]{Numero di pixel accesi per evento};
+\end{tikzpicture}
+%\end{document}
