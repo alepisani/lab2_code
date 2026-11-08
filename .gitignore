@@ -10,6 +10,10 @@
 relazione/
 data/
 
+*.root
+!data.root
+!data2.root
+
 data.csv
 *.raw
 
