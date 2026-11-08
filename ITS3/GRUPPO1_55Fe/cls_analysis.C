@@ -20,6 +20,7 @@ using namespace std;
 // =====================================================================
 // COSTANTI
 // =====================================================================
+const double PITCH = 10.;                   // [micron] dimensione del pixel 
 const int    NPIX = 16;
 const int    NCEN = 4;
 const int    NEXT = 12;
@@ -162,7 +163,7 @@ class Dataset {
             }
             any = true;
             nEv = std::max(nEv, px[i].maxEv);
-            std::cout << "Pixel " << i << ": " << n << " entries" << std::endl;
+            // std::cout << "Pixel " << i << ": " << n << " entries" << std::endl;
         }
         if (!any) { std::cerr << "Nessun pixel valido" << std::endl; return false; }
 
@@ -203,7 +204,6 @@ class Dataset {
 // =====================================================================
 Dataset d;                                  // dati letti una sola volta
 bool   optWriteClusterTree = false;
-bool   optDoMap            = false;
 bool   optDoMap16          = false;
 bool   optDoClusterCount   = false;
 bool   optDoPerClusterSz   = false;
@@ -264,39 +264,6 @@ void Draw16(TCanvas *c, TH1D *h[NPIX]) {
 }
 
 // =====================================================================
-// ANALISI 1: mappa 2x2 dei pixel centrali
-// =====================================================================
-void PlotMap() {
-    if (!LoadData()) return;
-    TCanvas *c = new TCanvas("c1", "Mappa Pixel 2x2", 800, 600);
-    TH2D *h = new TH2D("h_map", "Stato Pixel (2x2);Asse X;Asse Y", 2, 0, 2, 2, 0, 2);
-    h->SetDirectory(nullptr);
-    gStyle->SetOptStat(0);
-
-    for (Long64_t ev = 0; ev < d.nEv; ev++)
-        for (int i = 0; i < NCEN; i++)
-            if (d.on[ev][i]) h->Fill(i % 2 + 0.5, (1 - i / 2) + 0.5);
-
-    h->GetXaxis()->SetNdivisions(2);
-    h->GetYaxis()->SetNdivisions(2);
-    h->SetMinimum(0);
-    h->SetMarkerSize(1.8);
-    c->cd();
-    h->Draw("COLZ TEXT");
-
-    for (int i = 0; i < NCEN; i++) {
-        int x = i % 2, y = 1 - (i / 2);
-        TLatex *label = new TLatex(x + 0.5, y + 0.7, Form("Pixel %d", CEN_PX[i]));
-        label->SetTextAlign(22);
-        label->SetTextSize(0.03);
-        label->SetTextColor(kBlack);
-        label->Draw();
-    }
-    c->Modified();
-    c->Update();
-}
-
-// =====================================================================
 // ANALISI 1b: mappa 4x4 di tutti i pixel
 //   centrali: acceso (baseline != NOHIT)
 //   esterni : segnale > SEG_THR
@@ -304,7 +271,7 @@ void PlotMap() {
 void PlotMap16() {
     if (!LoadData()) return;
 
-    TCanvas *c = new TCanvas("c1_16", "Mappa Pixel 4x4", 900, 800);
+    TCanvas *c = new TCanvas("c1_16", "Mappa Pixel 4x4", 1000, 800);
     TH2D *h = new TH2D("h_map16",
                        Form("Stato Pixel (4x4), esterni con segnale > %g;Colonna;Riga", SEG_THR),
                        4, 0, 4, 4, 0, 4);
@@ -328,12 +295,14 @@ void PlotMap16() {
     h->SetMinimum(0);
     h->SetMarkerSize(1.6);
     c->cd();
+    c->SetRightMargin(0.15);   // spazio per la palette (default 0.1)
+    c->SetLeftMargin(0.10);
     h->Draw("COLZ TEXT");
 
     // etichetta con il numero del pixel in ogni cella
     for (int i = 0; i < NPIX; i++) {
         TLatex *label = new TLatex(i % 4 + 0.5, 3 - i / 4 + 0.78,
-                                   Form("Pixel %d%s", i, IsCentralPx(i) ? " (int)" : ""));
+                                   Form("Pixel %d", i));
         label->SetTextAlign(22);
         label->SetTextSize(0.025);
         label->SetTextColor(kBlack);
@@ -341,6 +310,7 @@ void PlotMap16() {
     }
     c->Modified();
     c->Update();
+    c->SaveAs("plots/mappa_4x4.pdf");
 }
 
 // =====================================================================
@@ -360,7 +330,7 @@ void PlotClusterCount() {
 
     // ---- istogramma numero di pixel accesi ----
     TCanvas *c2 = new TCanvas("c2", "Cluster Count", 800, 600);
-    TH1D *h_cluster = new TH1D("h_cluster", "Numero di pixel accesi per evento;Numero di pixel accesi;Numero di eventi",
+    TH1D *h_cluster = new TH1D("h_cluster", "Numero di pixel accesi per evento;Pixel;Conteggi",
                                5, -0.5, 4.5);
     h_cluster->SetDirectory(nullptr);
     for (int k = 0; k <= NCEN; k++) h_cluster->GetXaxis()->SetBinLabel(k + 1, Form("%d", k));
@@ -369,6 +339,7 @@ void PlotClusterCount() {
     h_cluster->Draw();
     c2->Modified();
     c2->Update();
+    c2->SaveAs("plots/pixel_on_per_event.pdf");
 
     // ---- segnale totale per cluster size (4 pad) ----
     TCanvas *c4 = new TCanvas("c4", "Signal vs Cluster Size (1D)", 1200, 900);
@@ -376,7 +347,7 @@ void PlotClusterCount() {
     TH1D *hs[NCEN];
     for (int k = 0; k < NCEN; k++) {
         hs[k] = new TH1D(Form("h_signal_cluster_%d", k + 1),
-                         Form("Segnale per cluster size = %d;Segnale [mV];Numero di eventi", k + 1), 100, 0, 100);
+                         Form("Segnale per cluster size = %d;Segnale [mV];Conteggi", k + 1), 100, 0, 100);
         hs[k]->SetDirectory(nullptr);
     }
     for (Long64_t ev = 0; ev < d.nEv; ev++)
@@ -384,6 +355,7 @@ void PlotClusterCount() {
     for (int k = 0; k < NCEN; k++) { c4->cd(k + 1); hs[k]->Draw(); }
     c4->Modified();
     c4->Update();
+    c4->SaveAs("plots/signtot_per_cls.pdf");
 
     // ---- sovrapposizione normalizzata ----
     TCanvas *c8 = new TCanvas("c8", "Segnale vs Dimensione del Cluster", 800, 600);
@@ -398,18 +370,19 @@ void PlotClusterCount() {
         hn[k]->SetLineColor(colori[k]);
         ymax = std::max(ymax, hn[k]->GetMaximum());
     }
-    hn[0]->SetTitle("Segnale totale normalizzato per cluster size;Segnale [mV];Frazione di eventi");
+    hn[0]->SetTitle("Confronto segnale totale al variare di clsuster size;Segnale [mV];Conteggi / Conteggi totali");
     hn[0]->SetMaximum(1.15 * ymax);
     hn[0]->SetMinimum(0.);
     c8->cd();
     hn[0]->Draw("HIST");
     for (int k = 1; k < NCEN; k++) hn[k]->Draw("HIST SAME");
 
-    TLegend *leg = new TLegend(0.7, 0.7, 0.9, 0.9);
+    TLegend *leg = new TLegend(0.1, 0.7, 0.3, 0.9);
     for (int k = 0; k < NCEN; k++) leg->AddEntry(hn[k], Form("%d Pixel%s", k + 1, k ? "s" : ""), "l");
     leg->Draw();
     c8->Modified();
     c8->Update();
+    c8->SaveAs("plots/overlay_sign_vs_clsize.pdf");
 }
 
 // =====================================================================
@@ -421,7 +394,7 @@ void PlotPerClusterSize() {
     TH1D    *h[NCEN][NPIX];
     for (int s = 0; s < NCEN; s++) {
         cCS[s] = new TCanvas(Form("cCS%d", s + 1),
-                             Form("Segnale - %d pixel interni accesi", s + 1), 1200, 800);
+                             Form("Segnale - %d pixel interni accesi", s + 1), 1600, 1200);
         cCS[s]->Divide(4, 4);
         MakeHists16(Form("h_cs_s%d", s + 1), Form("cluster size = %d", s + 1), h[s]);
     }
@@ -430,7 +403,11 @@ void PlotPerClusterSize() {
         if (cs < 1 || cs > NCEN) continue;
         FillEvent16(ev, h[cs - 1]);
     }
-    for (int s = 0; s < NCEN; s++) Draw16(cCS[s], h[s]);
+    for (int s = 0; s < NCEN; s++) {
+        Draw16(cCS[s], h[s]);
+        cCS[s]->SaveAs(Form("plots/segnale_clusize_%d.pdf", s + 1));   
+    }
+    
 }
 
 // =====================================================================
@@ -510,6 +487,7 @@ void PlotSegnaleSelection(int selPx = 0, double segMin = 60., double segMax = 15
     Draw16(c, h);
 }
 
+/*
 // =====================================================================
 // SCRITTURA DEL TREE "cluster" in data2.root (dai dati gia' in memoria)
 // =====================================================================
@@ -542,193 +520,11 @@ void WriteClusterTree() {
     t->Write("", TObject::kOverwrite);
     f->Close();
 }
+*/
+
 
 // =====================================================================
-// COSTANTI GEOMETRIA
-// =====================================================================
-const double PITCH = 10.;                   // [micron] dimensione del pixel 20x20
-const int    centroidSelPx = 0;             // pixel esterno da studiare
-
-// =====================================================================
-// ANALISI 6: segnale dei pixel interni quando si considera un evento
-//   del pixel esterno selPx, in funzione della distanza (geometria 4x4)
-//   Eventi selezionati: segnale di selPx in [segMin, segMax]
-//   Tutto in un unico canvas: griglia 4x4 (pad = posizione del pixel)
-//   + due riepiloghi a destra. Distanze in micron.
-// =====================================================================
-inline double PxX(int id) { return (id % 4) * PITCH; }   // colonna [um]
-inline double PxY(int id) { return (id / 4) * PITCH; }   // riga [um]
-
-// distanza tra due pixel [um]
-inline double PxDist(int a, int b) {
-    double dx = PxX(a) - PxX(b), dy = PxY(a) - PxY(b);
-    return std::sqrt(dx*dx + dy*dy);
-}
-
-// calcola il centroide interno dell'evento [um]; false se non definito
-bool Centroid(Long64_t ev, double &cx, double &cy) {
-    if (d.csize[ev] < 1 || d.totSig[ev] <= 0.) return false;
-    cx = 0.; cy = 0.;
-    for (int i = 0; i < NCEN; i++) {
-        if (!d.on[ev][i]) continue;
-        double s = d.px[CEN_PX[i]].signal[ev];
-        cx += s * PxX(CEN_PX[i]);
-        cy += s * PxY(CEN_PX[i]);
-    }
-    cx /= d.totSig[ev];
-    cy /= d.totSig[ev];
-    return true;
-}
-
-void PlotCentroid(int selPx = 0, double segMin = 0., double segMax = 1e9) {
-    if (!LoadData()) return;
-
-    if (selPx < 0 || selPx >= NPIX || IsCentralPx(selPx) || !d.px[selPx].Valid()) {
-        std::cerr << "selPx deve essere un pixel esterno valido: 0,1,2,3,4,7,8,11,12,13,14,15" << std::endl;
-        return;
-    }
-
-    const double dMax   = 4.5 * PITCH;   // 0 - 45 um
-    const double sMax   = 300.;          // range segnale totale
-    const double sMaxPx = 100.;          // range segnale singolo pixel
-
-    // ---- istogrammi ----
-    // segnale totale interno vs distanza centroide - selPx
-    TH2D *hTot = new TH2D(Form("h_intTot_sel%d", selPx),
-                          Form("Segnale totale interni vs distanza dal pixel %d;Distanza centroide - pixel %d [#mum];Segnale totale [SCOPE]",
-                               selPx, selPx),
-                          45, 0, dMax, 100, 0, sMax);
-    hTot->SetDirectory(nullptr);
-
-    // segnale di ogni pixel centrale vs distanza (fissa) pixel centrale - selPx
-    TH2D *hAll = new TH2D(Form("h_intAll_sel%d", selPx),
-                          Form("Segnale pixel interni vs distanza dal pixel %d;Distanza pixel interno - pixel %d [#mum];Signal [SCOPE]",
-                               selPx, selPx),
-                          45, 0, dMax, 100, 0, sMaxPx);
-    hAll->SetDirectory(nullptr);
-
-    // un istogramma per ogni pixel centrale: signal vs distanza centroide - selPx
-    TH2D *hEach[NCEN];
-    for (int k = 0; k < NCEN; k++) {
-        hEach[k] = new TH2D(Form("h_intPx%d_sel%d", CEN_PX[k], selPx),
-                            Form("Pixel %d (d=%.0f #mum);Dist. centroide-px %d [#mum];Signal [SCOPE]",
-                                 CEN_PX[k], PxDist(CEN_PX[k], selPx), selPx),
-                            30, 0, dMax, 50, 0, sMaxPx);
-        hEach[k]->SetDirectory(nullptr);
-    }
-
-    // segnale del pixel selezionato (eventi scelti)
-    TH1D *hSel = new TH1D(Form("h_selSeg_%d", selPx),
-                      Form("Pixel %d: segnale;Segnale [ADC];Eventi", selPx), 30, SEG_MIN_PLOT, SEG_MAX_PLOT);
-    hSel->SetDirectory(nullptr);
-
-    // ---- riempimento ----
-    int nUsed = 0;
-    for (Long64_t ev = 0; ev < d.nEv; ev++) {
-        if (!d.px[selPx].Fired(ev)) continue;
-        double g0 = d.px[selPx].segnale[ev];
-        if (g0 < segMin || g0 > segMax) continue;
-
-        double cx, cy;
-        if (!Centroid(ev, cx, cy)) continue;
-        nUsed++;
-
-        double dx = cx - PxX(selPx);
-        double dy = cy - PxY(selPx);
-        double distC = std::sqrt(dx*dx + dy*dy);
-
-        hSel->Fill(g0);
-        hTot->Fill(distC, d.totSig[ev]);
-
-        for (int k = 0; k < NCEN; k++) {
-            if (!d.on[ev][k]) continue;
-            double s = d.px[CEN_PX[k]].signal[ev];
-            hAll->Fill(PxDist(CEN_PX[k], selPx), s);
-            hEach[k]->Fill(distC, s);
-        }
-    }
-    std::cout << "Eventi con segnale pixel " << selPx << " in [" << segMin << ", " << segMax
-              << "] e centroide definito: " << nUsed << std::endl;
-
-    // ---- canvas unico ----
-    gStyle->SetOptStat(0);
-    gStyle->SetTitleFontSize(0.07);
-    TCanvas *c = new TCanvas(Form("c_intSig_sel%d", selPx),
-                             Form("Segnale pixel interni - eventi pixel %d", selPx), 1600, 900);
-
-    const double gridW = 0.70;           // frazione di larghezza per la griglia 4x4
-    const double w = gridW / 4., h = 1. / 4.;
-
-    for (int id = 0; id < NPIX; id++) {
-        int r = id / 4, col = id % 4;
-        double x1 = col * w, x2 = (col + 1) * w;
-        double y2 = 1. - r * h, y1 = y2 - h;
-
-        c->cd();
-        TPad *pad = new TPad(Form("pad_px%d_sel%d", id, selPx), "", x1, y1, x2, y2);
-        pad->SetMargin(0.17, 0.14, 0.17, 0.12);
-        pad->Draw();
-        pad->cd();
-
-        int k = CenIndex(id);
-        if (k >= 0) {
-            // pixel centrale: signal vs distanza centroide
-            hEach[k]->GetXaxis()->SetLabelSize(0.06);
-            hEach[k]->GetYaxis()->SetLabelSize(0.06);
-            hEach[k]->GetXaxis()->SetTitleSize(0.06);
-            hEach[k]->GetYaxis()->SetTitleSize(0.06);
-            hEach[k]->GetXaxis()->SetTitleOffset(1.0);
-            hEach[k]->GetYaxis()->SetTitleOffset(1.2);
-            hEach[k]->Draw("COLZ");
-        } else if (id == selPx) {
-            // pixel selezionato: distribuzione del segnale
-            pad->SetFillColor(kYellow - 9);
-            hSel->GetXaxis()->SetLabelSize(0.06);
-            hSel->GetYaxis()->SetLabelSize(0.06);
-            hSel->GetXaxis()->SetTitleSize(0.06);
-            hSel->GetYaxis()->SetTitleSize(0.06);
-            hSel->GetYaxis()->SetTitleOffset(1.2);
-            hSel->Draw();
-        } else {
-            // altri esterni: solo etichetta
-            pad->SetFillColor(kGray);
-            TLatex t;
-            t.SetNDC();
-            t.SetTextAlign(22);
-            t.SetTextSize(0.12);
-            t.DrawLatex(0.5, 0.58, Form("Pixel %d", id));
-            t.SetTextSize(0.08);
-            t.DrawLatex(0.5, 0.38, Form("d = %.0f #mum da px %d", PxDist(id, selPx), selPx));
-        }
-    }
-
-    // ---- riepiloghi a destra ----
-    c->cd();
-    TPad *pR1 = new TPad(Form("pad_tot_sel%d", selPx), "", gridW, 0.5, 1., 1.);
-    pR1->SetMargin(0.14, 0.14, 0.12, 0.10);
-    pR1->Draw();
-    pR1->cd();
-    hTot->Draw("COLZ");
-    TProfile *pTot = hTot->ProfileX(Form("p_intTot_sel%d", selPx));
-    pTot->SetLineColor(kRed);
-    pTot->SetMarkerColor(kRed);
-    pTot->SetMarkerStyle(20);
-    pTot->SetMarkerSize(0.7);
-    pTot->Draw("SAME");
-
-    c->cd();
-    TPad *pR2 = new TPad(Form("pad_all_sel%d", selPx), "", gridW, 0., 1., 0.5);
-    pR2->SetMargin(0.14, 0.14, 0.12, 0.10);
-    pR2->Draw();
-    pR2->cd();
-    hAll->Draw("COLZ");
-
-    c->Modified();
-    c->Update();
-}
-
-// =====================================================================
-// ANALISI 7: eventi con i due pixel centrali OPPOSTI (diagonale) accesi
+// ANALISI 6: eventi con i due pixel centrali OPPOSTI (diagonale) accesi
 //   coppia A: (5,10)   coppia B: (6,9)
 //   exclusive = true  -> solo quei due pixel accesi (cluster size = 2),
 //                        gli altri due centrali spenti
@@ -737,7 +533,8 @@ void PlotCentroid(int selPx = 0, double segMin = 0., double segMax = 1e9) {
 //   Un canvas 4x4 per coppia, con signal (centrali) / segnale (esterni)
 //   di tutti i 16 pixel.
 // =====================================================================
-void PlotOppositePairs(bool exclusive = true) {
+void PlotOppositePairs() {
+    bool exclusive = true;
     if (!LoadData()) return;
 
     // indici in CEN_PX: 5->0, 6->1, 9->2, 10->3
@@ -771,9 +568,12 @@ void PlotOppositePairs(bool exclusive = true) {
     }
 
     for (int p = 0; p < NPAIR; p++) {
+        int pa = CEN_PX[pairs[p][0]], pb = CEN_PX[pairs[p][1]];
         std::cout << "Eventi con pixel " << CEN_PX[pairs[p][0]] << " e " << CEN_PX[pairs[p][1]]
                   << " accesi" << (exclusive ? " (solo questi)" : "") << ": " << nSel[p] << std::endl;
         Draw16(c[p], h[p]);
+        c[p]->Update();
+        c[p]->SaveAs(Form("plots/opposti_%d_%d.pdf", pa, pb));       
     }
 }
 
@@ -784,26 +584,24 @@ void PlotOppositePairs(bool exclusive = true) {
 void cls_analysis() {
 
     bool   optWriteClusterTree = false;
-    bool   optDoMap            = true;
-    bool   optDoMap16          = true;
-    bool   optDoClusterCount   = false;
-    bool   optDoPerClusterSz   = false;
-    bool   optDoSeed           = false;
-    bool   optDoSegSelection   = false;
-    bool   optDoCentroid       = false;
-    bool   optDoOpposite       = false;
 
- 
+    bool   optDoMap16          = false;      // mostra i conteggi di tutti i pixel 4x4
+    bool   optDoClusterCount   = false;      // hist dimensione cls (2x2) + segnale sui cls
+    bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
+    bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
+    
+    
     if (!LoadData()) return;
+    
+    //if (optWriteClusterTree) WriteClusterTree();
+    bool   optDoSeed           = false;      // check what happen selezionando un range nei pixel interni
+    bool   optDoSegSelection   = false;      // check what happen selezionando un range nei pixel esterni
+    if (optDoSeed)         PlotSeed(true, 50., 150);          // bool applyCut, double sigCut_min, double sigCut_max
+    if (optDoSegSelection) PlotSegnaleSelection(0, 0., 150.); // pixel esterno 0, segnale in [60, 150]
 
-    if (optWriteClusterTree) WriteClusterTree();
-
-    if (optDoMap)          PlotMap();
+    
     if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoPerClusterSz) PlotPerClusterSize();
-    if (optDoSeed)         PlotSeed(true, 50., 150);          // bool applyCut, double sigCut_min, double sigCut_max
-    if (optDoSegSelection) PlotSegnaleSelection(0, 0., 150.); // pixel esterno 0, segnale in [60, 150]
-    if (optDoCentroid)     PlotCentroid(centroidSelPx, 0., 1e9); // eventi con segnale pixel 0 in [min, max]
-    if (optDoOpposite)     PlotOppositePairs(true);           // true = solo i due pixel opposti accesi
+    if (optDoOpposite)     PlotOppositePairs();
 }
