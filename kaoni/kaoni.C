@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 
 using namespace std;
@@ -21,11 +22,14 @@ void kaoni()
     double err_BR_rel = err_BR / BR;
     double Z = (BR - BR_true) / sqrt(pow(err_BR, 2) + pow(BR_true_err, 2));
 
-    cout << "\nBR: " << BR << " +/- " << err_BR << " (" << err_BR_rel*100. << "%)" << endl;
+    cout << "========================================\n\n";
+    cout << "  BR: (" << BR*100. << " +/- " << err_BR*100. << ") %" << endl;
+    cout << "  Incertezza relativa: " << err_BR_rel*100. << "%" << endl;
     
-    cout << "Confronto con valore PDG: Z = " << Z << endl;
+    cout << "  Confronto con valore PDG: Z = " << fixed << setprecision(3) << Z << "\n\n";
+    cout << "========================================\n\n";
 
     if(err_BR_rel < 0.15 && fabs(Z) < 2)
-        cout << "\n================================\n\n     E COFFEE BREAK SIGNORI\n\n================================\n\n";
+        cout << "         E COFFEE BREAK SIGNORI\n\n========================================\n\n";
 
 }
