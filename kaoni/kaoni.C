@@ -7,10 +7,12 @@ using namespace std;
 #define BR_true 5.583e-2
 #define BR_true_err 0.024e-2
 
+//Nota: il BR totale degli altri canali di decadimento a 3 particelle cariche (senza gamma11) è 6.81e-5, trascurabile ma per sicurezza confrontiamo con le nostre barre d'errore
+
 void kaoni()
 {
-    int iN3 = 1;
-    int iN1 = 1;
+    int iN3 = 54;
+    int iN1 = 836;
 
     double N3 = (double)iN3;
     double N1 = (double)iN1;
@@ -29,7 +31,7 @@ void kaoni()
     cout << "  Confronto con valore PDG: Z = " << fixed << setprecision(3) << Z << "\n\n";
     cout << "========================================\n\n";
 
-    if(err_BR_rel < 0.15 && fabs(Z) < 2)
+    if(err_BR_rel < 0.15 && fabs(Z) < 1)
         cout << "         E COFFEE BREAK SIGNORI\n\n========================================\n\n";
 
 }
