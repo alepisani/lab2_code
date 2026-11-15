@@ -160,6 +160,21 @@
 \draw [anchor= east] (1.9,10.0924) node[scale=0.989296, color=c, rotate=0]{4000};
 \draw [anchor= east] (1.9,11.1938) node[scale=0.989296, color=c, rotate=0]{4500};
 \draw [anchor= east] (0.409132,11.5256) node[scale=0.989296, color=c, rotate=90]{Conteggi};
+\definecolor{c}{rgb}{1,1,1};
+\draw [color=c, fill=c] (15.6,9.92483) rectangle (19.6,11.9738);
+\definecolor{c}{rgb}{0,0,0};
+\draw [c,line width=0.3] (15.6,9.92483) -- (19.6,9.92483);
+\draw [c,line width=0.3] (19.6,9.92483) -- (19.6,11.9738);
+\draw [c,line width=0.3] (19.6,11.9738) -- (15.6,11.9738);
+\draw [c,line width=0.3] (15.6,11.9738) -- (15.6,9.92483);
+\draw (17.6,11.7177) node[scale=1.03876, color=c, rotate=0]{h\_cluster\_full};
+\draw [c,line width=0.3] (15.6,11.4616) -- (19.6,11.4616);
+\draw [anchor= west] (15.8,11.2055) node[scale=1.03876, color=c, rotate=0]{Entries };
+\draw [anchor= east] (19.4,11.2055) node[scale=1.03876, color=c, rotate=0]{ 10001};
+\draw [anchor= west] (15.8,10.6932) node[scale=1.03876, color=c, rotate=0]{Mean  };
+\draw [anchor= east] (19.4,10.6932) node[scale=1.03876, color=c, rotate=0]{  1.809};
+\draw [anchor= west] (15.8,10.181) node[scale=1.03876, color=c, rotate=0]{Std Dev   };
+\draw [anchor= east] (19.4,10.181) node[scale=1.03876, color=c, rotate=0]{ 0.9039};
 \draw (10,12.368) node[scale=0.939831, color=c, rotate=0]{Numero di pixel colpiti per evento (centrali accesi + esterni con segnale $>$ 8)};
 \end{tikzpicture}
 %\end{document}

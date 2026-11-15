@@ -475,6 +475,90 @@ void PlotClusterCountFull(bool plotSignal = false) {
 }
 
 // =====================================================================
+// ANALISI 2c: segnale totale (16 pixel) per cluster size + overlay normalizzato
+//   hit centrali : acceso (baseline != NOHIT)  -> si somma signal
+//   hit esterni  : segnale > SEG_THR           -> si somma segnale
+//   cluster size = numero totale di pixel colpiti (centrali + esterni)
+//   Si considerano solo gli eventi con cluster size = 1, 2, 3, 4.
+//   Produce:
+//     1) canvas con un pad per ogni cluster size (segnale totale)
+//     2) overlay normalizzato delle distribuzioni
+// =====================================================================
+void PlotClusterSignalFull() {
+    if (!LoadData()) return;
+
+    const int    NCS   = 4;       // cluster size 1,2,3,4
+    const int    NBINS = 100;
+    const double XMAX  = 100.;    // range del segnale totale [mV]
+
+    // ---- cluster size completa e segnale totale per evento ----
+    std::vector<int>    csizeFull(d.nEv, 0);
+    std::vector<double> totFull(d.nEv, 0.);
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        for (int i = 0; i < NPIX; i++) {
+            if (!d.px[i].Valid()) continue;
+            bool hit = d.px[i].central ? d.px[i].IsOn(ev) : d.px[i].Fired(ev);
+            if (!hit) continue;
+            csizeFull[ev]++;
+            totFull[ev] += d.px[i].Value(ev);
+        }
+    }
+
+    // ---- istogrammi per cluster size ----
+    TH1D *hs[NCS];
+    for (int k = 0; k < NCS; k++) {
+        hs[k] = new TH1D(Form("h_sigfull_cls_%d", k + 1),
+                         Form("Segnale totale (16 pixel), cluster size = %d;Segnale totale [mV];Conteggi", k + 1),
+                         NBINS, 0, XMAX);
+        hs[k]->SetDirectory(nullptr);
+    }
+    for (Long64_t ev = 0; ev < d.nEv; ev++) {
+        int cs = csizeFull[ev];
+        if (cs < 1 || cs > NCS) continue;     // solo cluster size 1..4
+        hs[cs - 1]->Fill(totFull[ev]);
+    }
+
+    // ---- canvas con un pad per cluster size ----
+    TCanvas *c1 = new TCanvas("c_sigfull_pads", "Segnale totale per cluster size (16 pixel)", 1200, 900);
+    c1->Divide(2, 2);
+    for (int k = 0; k < NCS; k++) { c1->cd(k + 1); hs[k]->Draw(); }
+    c1->Modified();
+    c1->Update();
+    c1->SaveAs("plots/signtot_per_cls_16px.pdf");
+    c1->SaveAs("plots/signtot_per_cls_16px.tex");
+
+    // ---- overlay normalizzato ----
+    TCanvas *c2 = new TCanvas("c_sigfull_overlay", "Overlay segnale totale vs cluster size (16 pixel)", 800, 600);
+    const int colori[NCS] = {kRed, kGreen + 2, kBlue, kBlack};
+    TH1D *hn[NCS];
+    double ymax = 0.;
+    for (int k = 0; k < NCS; k++) {
+        hn[k] = (TH1D*)hs[k]->Clone(Form("h_sigfull_norm_%d", k + 1));
+        hn[k]->SetDirectory(nullptr);
+        double integral = hn[k]->Integral();
+        if (integral > 0.) hn[k]->Scale(1.0 / integral);
+        hn[k]->SetLineColor(colori[k]);
+        hn[k]->SetLineWidth(2);
+        ymax = std::max(ymax, hn[k]->GetMaximum());
+    }
+    hn[0]->SetTitle("Segnale totale (16 pixel) al variare del cluster size;Segnale totale [mV];Conteggi / Conteggi totali");
+    hn[0]->SetMaximum(1.15 * ymax);
+    hn[0]->SetMinimum(0.);
+    c2->cd();
+    hn[0]->Draw("HIST");
+    for (int k = 1; k < NCS; k++) hn[k]->Draw("HIST SAME");
+
+    TLegend *leg = new TLegend(0.12, 0.7, 0.32, 0.9);
+    for (int k = 0; k < NCS; k++)
+        leg->AddEntry(hn[k], Form("%d Pixel%s", k + 1, k ? "s" : ""), "l");
+    leg->Draw();
+    c2->Modified();
+    c2->Update();
+    c2->SaveAs("plots/overlay_sign_vs_clsize_16px.pdf");
+    c2->SaveAs("plots/overlay_sign_vs_clsize_16px.tex");
+}
+
+// =====================================================================
 // ANALISI 3: tutti i 16 pixel in funzione del cluster size (1..4)
 // =====================================================================
 void PlotPerClusterSize() {
@@ -712,12 +796,12 @@ void cls_analysis() {
     if (optDoSegSelection) PlotSegnaleSelection(0, 0., 150.); // pixel esterno 0, segnale in [60, 150]
 
 
-    bool   optDoMap16          = true;      // mostra i conteggi di tutti i pixel 4x4
+    bool   optDoMap16          = false;      // mostra i conteggi di tutti i pixel 4x4
     bool   optDoClusterCount   = true;      // hist dimensione cls (2x2) + segnale sui cls
-    bool   optDoClusterCountFull = true;     // cluster size su tutti i 16 pixel
-    bool   optDoPerClusterSz   = true;      // segnale 16pixel divisi per cluster size (dei pixel interni)
-    bool   optDoOpposite       = true;      // check eventi in cui pixel interni opposti si accendono
-    bool   optDoAllSignals     = true;       // segnali dei 16 pixel su tutti gli eventi
+    bool   optDoClusterCountFull = true;    // cluster size su tutti i 16 pixel
+    bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
+    bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
+    bool   optDoAllSignals     = false;      // segnali dei 16 pixel su tutti gli eventi
     
     if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
@@ -725,6 +809,9 @@ void cls_analysis() {
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoOpposite)     PlotOppositePairs();
     if (optDoAllSignals)   PlotAllSignals();   // true -> asse y logaritmico
+
+    bool optDoClusterSignalFull = true;     // segnale totale (16 pixel) per cluster size + overlay
+    if (optDoClusterSignalFull) PlotClusterSignalFull();
 
     
 }
