@@ -130,8 +130,6 @@ class Pixel {
     }
 
     // pixel esterno con segnale sopra soglia nell'evento
-    // bool Fired(Long64_t ev) const { return !central && hasSegnale && present[ev]; }
-    // pixel esterno con segnale sopra soglia nell'evento
     bool Fired(Long64_t ev) const {
         return !central && hasSegnale && present[ev] && segnale[ev] > SEG_THR;
     }
@@ -226,7 +224,7 @@ bool LoadData() {
 // FUNZIONI DI SUPPORTO (istogrammi per tutti i 16 pixel)
 // =====================================================================
 
-// crea un istogramma per ogni pixel valido: signal [0,100] per i centrali, segnale [0,SEG_MAX] per gli esterni
+// crea un istogramma per ogni pixel valido: signal [0,100] per i centrali, segnale [0,100] per gli esterni
 void MakeHists16(const char *name, const char *title, TH1D *h[NPIX]) {
     for (int i = 0; i < NPIX; i++) {
         h[i] = nullptr;
@@ -253,10 +251,29 @@ void FillEvent16(Long64_t ev, TH1D *h[NPIX]) {
 }
 
 // disegna i 16 istogrammi in un canvas 4x4 (pad = numero pixel + 1)
-void Draw16(TCanvas *c, TH1D *h[NPIX]) {
+// tutti con lo stesso asse y: massimo = 1.15 * bin piu' alto tra i 16 plot
+// (in scala log il margine e' maggiore)
+void Draw16(TCanvas *c, TH1D *h[NPIX], bool logY = false) {
+    // 1) bin massimo tra tutti i pixel del canvas
+    double ymax = 0.;
     for (int i = 0; i < NPIX; i++) {
         if (!h[i]) continue;
+        ymax = std::max(ymax, h[i]->GetMaximum());
+    }
+    if (ymax <= 0.) ymax = 1.;   // canvas vuoto
+
+    // 2) stesso range y per tutti
+    for (int i = 0; i < NPIX; i++) {
+        if (!h[i]) continue;
+        if (logY) {
+            h[i]->SetMinimum(0.5);
+            h[i]->SetMaximum(3. * ymax);
+        } else {
+            h[i]->SetMinimum(0.);
+            h[i]->SetMaximum(1.1 * ymax);
+        }
         c->cd(i + 1);
+        if (logY) gPad->SetLogy();
         h[i]->Draw();
     }
     c->Modified();
@@ -661,42 +678,6 @@ void PlotSegnaleSelection(int selPx = 0, double segMin = 60., double segMax = 15
     Draw16(c, h);
 }
 
-/*
-// =====================================================================
-// SCRITTURA DEL TREE "cluster" in data2.root (dai dati gia' in memoria)
-// =====================================================================
-void WriteClusterTree() {
-    if (!LoadData()) return;
-    TFile *f = TFile::Open(DATAFILE, "UPDATE");
-    if (!f || f->IsZombie()) { std::cerr << "Impossibile aprire " << DATAFILE << " in UPDATE" << std::endl; return; }
-    f->cd();
-    TTree *t = new TTree("cluster", "Cluster dei pixel interni");
-
-    Int_t    b_size = 0;
-    Double_t b_totsig = 0.;
-    Int_t    b_on[4]  = {0, 0, 0, 0};
-    Double_t b_sig[4] = {0., 0., 0., 0.};
-
-    t->Branch("cluster_size", &b_size,   "cluster_size/I");
-    t->Branch("total_signal", &b_totsig, "total_signal/D");
-    t->Branch("pixel_on",     b_on,      "pixel_on[4]/I");
-    t->Branch("pixel_signal", b_sig,     "pixel_signal[4]/D");
-
-    for (Long64_t ev = 0; ev < d.nEv; ev++) {
-        b_size   = d.csize[ev];
-        b_totsig = d.totSig[ev];
-        for (int i = 0; i < NCEN; i++) {
-            b_on[i]  = d.on[ev][i];
-            b_sig[i] = d.on[ev][i] ? d.px[CEN_PX[i]].signal[ev] : 0.;
-        }
-        t->Fill();
-    }
-    t->Write("", TObject::kOverwrite);
-    f->Close();
-}
-*/
-
-
 // =====================================================================
 // ANALISI 6: eventi con i due pixel centrali OPPOSTI (diagonale) accesi
 //   coppia A: (5,10)   coppia B: (6,9)
@@ -768,13 +749,7 @@ void PlotAllSignals(bool logY = false) {
 
     for (Long64_t ev = 0; ev < d.nEv; ev++) FillEvent16(ev, h);
 
-    Draw16(c, h);
-
-    if (logY) {
-        for (int i = 0; i < NPIX; i++) c->cd(i + 1)->SetLogy();
-        c->Modified();
-        c->Update();
-    }
+    Draw16(c, h, logY);     // asse y comune, SetLogy gestito da Draw16
 
     c->SaveAs("plots/signal_all.pdf");
     c->SaveAs("plots/signal_all.tex");
@@ -789,7 +764,6 @@ void cls_analysis() {
 
     bool   optWriteClusterTree = false;
     if (!LoadData()) return;
-    //if (optWriteClusterTree) WriteClusterTree();
     bool   optDoSeed           = false;      // check what happen selezionando un range nei pixel interni
     bool   optDoSegSelection   = false;      // check what happen selezionando un range nei pixel esterni
     if (optDoSeed)         PlotSeed(true, 50., 150);          // bool applyCut, double sigCut_min, double sigCut_max
@@ -797,8 +771,9 @@ void cls_analysis() {
 
 
     bool   optDoMap16          = false;      // mostra i conteggi di tutti i pixel 4x4
-    bool   optDoClusterCount   = true;      // hist dimensione cls (2x2) + segnale sui cls
-    bool   optDoClusterCountFull = true;    // cluster size su tutti i 16 pixel
+    bool   optDoClusterCount   = false;      // hist dimensione cls (2x2) + segnale sui cls
+    bool   optDoClusterCountFull = false;    // cluster size su tutti i 16 pixel
+    bool   optDoClusterSignalFull = false;   // segnale totale (16 pixel) per cluster size + overlay
     bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
     bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
     bool   optDoAllSignals     = false;      // segnali dei 16 pixel su tutti gli eventi
@@ -806,12 +781,8 @@ void cls_analysis() {
     if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
     if (optDoClusterCountFull) PlotClusterCountFull(false);   // true -> anche segnale totale
+    if (optDoClusterSignalFull) PlotClusterSignalFull();
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoOpposite)     PlotOppositePairs();
     if (optDoAllSignals)   PlotAllSignals();   // true -> asse y logaritmico
-
-    bool optDoClusterSignalFull = true;     // segnale totale (16 pixel) per cluster size + overlay
-    if (optDoClusterSignalFull) PlotClusterSignalFull();
-
-    
 }
