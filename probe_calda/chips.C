@@ -13,6 +13,9 @@
 struct Dataset {
    std::string name;
    int color, marker;
+   bool cfSingolo;                     // fa il plot singolo C - f
+   bool inConfrontoCf;                 // il sensore compare nel confronto C - f
+   bool inConfrontoV;                  // il sensore compare nei confronti C - V e 1/C^2 - V
    std::vector<double> f, C_f, eC_f;   // C - f   (f in kHz, C in pF)
    std::vector<double> V, C_v, eC_v;   // C - V   (|V| in V, C in pF)
 };
@@ -32,6 +35,9 @@ void chips()
    sets[0].name   = "nogain";
    sets[0].color  = kBlack;
    sets[0].marker = 20;
+   sets[0].cfSingolo = true;
+   sets[0].inConfrontoCf = true;
+   sets[0].inConfrontoV  = false;
    sets[0].f   = { 0.5, 0.6, 0.7, 0.85, 1, 1.2, 1.45, 1.7, 2, 2.5,
                    3, 4, 5.3, 7.1, 9.5, 12, 15, 18, 22, 27,
                    35, 42, 55, 72, 90, 100, 120, 150, 200, 500 };
@@ -55,6 +61,9 @@ void chips()
    sets[1].name   = "LGAD";
    sets[1].color  = kRed + 1;
    sets[1].marker = 21;
+   sets[1].cfSingolo = true;
+   sets[1].inConfrontoCf = true;
+   sets[1].inConfrontoV  = true;
    sets[1].f   = { 1, 1.5, 2.3, 3.5, 5.3, 8, 12, 18, 27, 40,
                    60, 90, 140, 210, 300 };
    sets[1].C_f = { 151.5, 150.7, 150.1, 150.2, 150.1, 149.93, 148.5, 148.6, 147.9, 145.4,
@@ -78,6 +87,9 @@ void chips()
    sets[2].name   = "PiN";
    sets[2].color  = kBlue + 1;
    sets[2].marker = 22;
+   sets[2].cfSingolo = false;
+   sets[2].inConfrontoCf = false;
+   sets[2].inConfrontoV  = true;
    sets[2].f   = { 1, 1.5, 2.3, 3.5, 5.3, 8, 12, 18, 27, 40,
                    60, 90, 140, 210, 300 };
    sets[2].C_f = { 151.5, 150.7, 150.1, 150.2, 150.1, 149.93, 148.5, 148.6, 147.9, 145.4,
@@ -98,6 +110,9 @@ void chips()
    sets[3].name   = "EX-FLUE";
    sets[3].color  = kGreen + 2;
    sets[3].marker = 23;
+   sets[3].cfSingolo = false;
+   sets[3].inConfrontoCf = false;
+   sets[3].inConfrontoV  = true;
    sets[3].f   = { 1, 1.5, 2.3, 3.5, 5.3, 8, 12, 18, 27, 40,
                    60, 90, 140, 210, 300 };
    sets[3].C_f = { 151.5, 150.7, 150.1, 150.2, 150.1, 149.93, 148.5, 148.6, 147.9, 145.4,
@@ -130,9 +145,9 @@ void chips()
    TMultiGraph *mg3 = new TMultiGraph("mg_invC2V", "Confronto 1/C^{2} vs V;|V| [V];1/C^{2} [pF^{-2}]");
 
    // coordinate NDC (x1, y1, x2, y2) della legenda; gli assi occupano da 0.1 a 0.9
-   TLegend *leg1 = new TLegend(0.11, 0.11, 0.27, 0.29);   // C-f      : basso a sinistra
-   TLegend *leg2 = new TLegend(0.73, 0.71, 0.89, 0.89);   // C-V      : alto a destra
-   TLegend *leg3 = new TLegend(0.73, 0.11, 0.89, 0.29);   // 1/C^2-V  : basso a destra
+   TLegend *leg1 = new TLegend(0.11, 0.11, 0.27, 0.23);   // C-f      : basso a sinistra (2 voci)
+   TLegend *leg2 = new TLegend(0.73, 0.74, 0.89, 0.89);   // C-V      : alto a destra    (3 voci)
+   TLegend *leg3 = new TLegend(0.73, 0.11, 0.89, 0.26);   // 1/C^2-V  : basso a destra   (3 voci)
    TLegend *legs[3] = { leg1, leg2, leg3 };
    for (int j = 0; j < 3; ++j) {
       legs[j]->SetFillColor(kWhite);
@@ -183,10 +198,12 @@ void chips()
       }
 
       // --- canvas singole ---
-      TCanvas *ci1 = new TCanvas(("c_" + s.name + "_Cf").c_str(), (s.name + ": C vs f").c_str(), 800, 600);
-      ci1->SetGrid(); ci1->SetLogx();   // f in scala log
-      g1->Draw("AP");
-      salva(ci1, "./plots/" + s.name + "_C_f");
+      if (s.cfSingolo) {
+         TCanvas *ci1 = new TCanvas(("c_" + s.name + "_Cf").c_str(), (s.name + ": C vs f").c_str(), 800, 600);
+         ci1->SetGrid(); ci1->SetLogx();   // f in scala log
+         g1->Draw("AP");
+         salva(ci1, "./plots/" + s.name + "_C_f");
+      }
 
       TCanvas *ci2 = new TCanvas(("c_" + s.name + "_CV").c_str(), (s.name + ": C vs V").c_str(), 800, 600);
       ci2->SetGrid();
@@ -205,15 +222,19 @@ void chips()
       salva(ci3, "./plots/" + s.name + "_invC2_V");
 
       // --- copie dei grafici per il confronto (stessi stili) ---
-      TGraphErrors *m1 = (TGraphErrors*)g1->Clone();
-      TGraphErrors *m2 = (TGraphErrors*)g2->Clone();
-      TGraphErrors *m3 = (TGraphErrors*)g3->Clone();
-      mg1->Add(m1, "P");
-      mg2->Add(m2, "P");
-      mg3->Add(m3, "P");
-      leg1->AddEntry(m1, s.name.c_str(), "p");
-      leg2->AddEntry(m2, s.name.c_str(), "p");
-      leg3->AddEntry(m3, s.name.c_str(), "p");
+      if (s.inConfrontoCf) {
+         TGraphErrors *m1 = (TGraphErrors*)g1->Clone();
+         mg1->Add(m1, "P");
+         leg1->AddEntry(m1, s.name.c_str(), "p");
+      }
+      if (s.inConfrontoV) {
+         TGraphErrors *m2 = (TGraphErrors*)g2->Clone();
+         TGraphErrors *m3 = (TGraphErrors*)g3->Clone();
+         mg2->Add(m2, "P");
+         mg3->Add(m3, "P");
+         leg2->AddEntry(m2, s.name.c_str(), "p");
+         leg3->AddEntry(m3, s.name.c_str(), "p");
+      }
    }
 
    // ================= CANVAS DI CONFRONTO =================
