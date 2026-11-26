@@ -23,7 +23,9 @@ int find_100V(const vector<double>&);
 
 void IV_analysis()
 {
-    double err_temperature = 0.2;
+    double err_temperature = 0.3;
+
+    double pixel_volume = 0.13 * 0.13 * 0.003; // cm^3
 
     int ordJ[] = {8,6,4,2,0,1,3,5,7}; //Mi dispiace
 
@@ -36,7 +38,7 @@ void IV_analysis()
     
     vector<double> *V=nullptr, *I=nullptr, *V_err=nullptr, *I_err=nullptr;
 
-    vector<vector<double>> vI100(4), err_vI100(4), vT100(4);
+    vector<vector<double>> vI100(4), err_vI100(4), vT100(4), err_vT100(4);
     double T;
 
     TCanvas *c1 = new TCanvas("c1", "IV Curves", 2000, 1000);
@@ -76,7 +78,7 @@ void IV_analysis()
             tree->GetEntry(ordJ[j]);
             double T_K = (double)T + 273.15;
             overT.push_back(1000./T_K);
-            err_overT.push_back(err_temperature/(T_K*T_K));
+            err_overT.push_back(1000.*err_temperature/(T_K*T_K));
             int index_100V = find_100V(*V);
             double I100 = (*I)[index_100V];
             double err_I100 = (*I_err)[index_100V];
@@ -85,6 +87,7 @@ void IV_analysis()
             vI100[i].push_back(I100);
             err_vI100[i].push_back(err_I100);
             vT100[i].push_back(T);
+            err_vT100[i].push_back(err_temperature);
 
             double err = sqrt(pow(err_I100/I100, 2) + pow(2.*err_temperature/T_K, 2));
             err_logIoverT2.push_back(err);
@@ -103,6 +106,7 @@ void IV_analysis()
                 legend->AddEntry(gr, Form("T = %.1f C", T), "pl");
                 counter++;
             }
+
         }
         mg->SetTitle(Form("IV Curves for #Phi = %s n_{eq}/cm^{2}", fluences[i].c_str()));
         mg->Draw("AP");
@@ -116,7 +120,7 @@ void IV_analysis()
 
 
         c2->cd(i+1);
-        gPad->SetLeftMargin(0.1);
+        gPad->SetLeftMargin(0.15);
         gPad->SetBottomMargin(0.15);
         gPad->SetRightMargin(0.05);
         gPad->SetTopMargin(0.10);
@@ -135,7 +139,7 @@ void IV_analysis()
         agr->GetXaxis()->SetLabelSize(0.04);
         agr->GetYaxis()->SetLabelSize(0.04);
         mg_arr->Add(agr);
-        legend_arr->AddEntry(agr, Form("T = %.1f C", T), "pl");
+        legend_arr->AddEntry(agr, Form("#Phi = %s n_{eq}/cm^{2}", fluences[i].c_str()), "pl");
 
         TF1 *arr_fit = new TF1(Form("arr_fit_%s", tree_names[i].c_str()), "[0]*x + [1]", 3.3, 4.1);
         arr_fit->SetLineColor(colors[i]);
@@ -169,6 +173,102 @@ void IV_analysis()
     mg_arr->GetXaxis()->SetLabelSize(0.04);
     mg_arr->GetYaxis()->SetLabelSize(0.04);
     legend_arr->Draw();
+
+
+    TCanvas *c4 = new TCanvas("c4", "Damage factor", 1100, 600);
+    TMultiGraph *mg_df = new TMultiGraph();
+    TLegend *legend_df = new TLegend(0.75, 0.7, 0.95, 0.9);
+
+    double df_coeff[9], df_coeff_err[9];
+
+    for(int i=0;i<9;i++)
+    {
+        double I2[] = {vI100[0][i], vI100[1][i], vI100[2][i], vI100[3][i]};
+        double err_I2[] = {err_vI100[0][i], err_vI100[1][i], err_vI100[2][i], err_vI100[3][i]};
+        double fluence2[] = {0., 1e14, 8e14, 15e14};
+        double err_fluence2[] = {0., 1e13, 8e13, 1.5e14};
+        TGraphErrors *gr2 = new TGraphErrors(4, fluence2, I2, err_fluence2, err_I2);
+        gr2->SetName(Form("Damage_factor_T%.1fC", vT100[0][i]));
+        gr2->SetTitle(Form("Damage factor for T = %.1f C", vT100[0][i]));
+        gr2->SetMarkerStyle(20);
+        gr2->SetMarkerSize(0.5);
+        gr2->SetLineColor(colors[i]);
+        gr2->SetMarkerColor(colors[i]);
+        mg_df->Add(gr2);
+        legend_df->AddEntry(gr2, Form("T = %.1f C", vT100[0][i]), "pl");
+
+        TF1 *df_fit = new TF1(Form("df_fit_T%.1fC", vT100[0][i]), "[0]*x + [1]", 0.5e14, 2e15);
+        df_fit->SetLineColor(colors[i]);
+        df_fit->SetParameter(0, I2[3]/fluence2[3]);
+        df_fit->SetParameter(1, 0);
+        gr2->Fit(df_fit, "RQ");
+        df_fit->Draw("same");
+        cout << "T = " << vT100[0][i] << " C" << endl;
+        cout << "Fit parameters: " << endl;
+        cout << "Slope: " << df_fit->GetParameter(0) << " +/- " << df_fit->GetParError(0) << endl;
+        cout << "Intercept: " << df_fit->GetParameter(1) << " +/- " << df_fit->GetParError(1) << endl;
+        cout << "Chi2/NDF: " << df_fit->GetChisquare() << " / " << df_fit->GetNDF() << endl;
+        cout << "P-value: " << df_fit->GetProb() << endl;
+        cout << "----------------------------------------" << endl;
+
+        df_coeff[i] = df_fit->GetParameter(0)/pixel_volume*1e9;
+        df_coeff_err[i] = df_fit->GetParError(0)/pixel_volume*1e9;
+    }
+
+    c4->cd();
+    gPad->SetLeftMargin(0.1);
+    gPad->SetBottomMargin(0.15);
+    gPad->SetRightMargin(0.05);
+    gPad->SetTopMargin(0.10);
+    mg_df->SetTitle("Damage factor for all temperatures");
+    mg_df->Draw("AP");
+    mg_df->GetXaxis()->SetTitle("#Phi [n_{eq}/cm^{2}]");
+    mg_df->GetYaxis()->SetTitle("I_{100V} [nA]");
+    mg_df->GetXaxis()->SetTitleSize(0.05);
+    mg_df->GetYaxis()->SetTitleSize(0.05);
+    mg_df->GetXaxis()->SetLabelSize(0.04);
+    mg_df->GetYaxis()->SetLabelSize(0.04);
+    legend_df->Draw();
+
+
+    TCanvas *c5 = new TCanvas("c5", "Damage factor vs Temperature", 900, 600);
+    gPad->SetLeftMargin(0.1);
+    gPad->SetBottomMargin(0.15);
+    gPad->SetRightMargin(0.05);
+    gPad->SetTopMargin(0.10);
+    TGraphErrors *gr_dfT = new TGraphErrors(9, vT100[0].data(), df_coeff, err_vT100[0].data(), df_coeff_err);
+    gr_dfT->SetName("Damage_factor_vs_Temperature");
+    gr_dfT->SetTitle("Damage factor vs Temperature");
+    gr_dfT->SetMarkerStyle(20);
+    gr_dfT->SetMarkerSize(0.5);
+    gr_dfT->Draw("AP");
+    gr_dfT->GetXaxis()->SetTitle("T [C]");
+    gr_dfT->GetYaxis()->SetTitle("Damage factor [10^{-18} A/(n_{eq}*cm)]");
+    gr_dfT->GetXaxis()->SetTitleSize(0.05);
+    gr_dfT->GetYaxis()->SetTitleSize(0.05);
+    gr_dfT->GetXaxis()->SetLabelSize(0.04);
+    gr_dfT->GetYaxis()->SetLabelSize(0.04);
+
+    TF1 *dfT_fit = new TF1("dfT_fit", "[0]*exp([1]*x)", -30, 30);
+    dfT_fit->SetLineColor(kRed);
+    dfT_fit->SetParameter(0, 5);
+    dfT_fit->SetParameter(1, 0.10);
+    gr_dfT->Fit(dfT_fit, "RQ");
+    dfT_fit->Draw("same");
+
+    cout << "----------------------------------------" << endl;
+    cout << "Fit p value: " << dfT_fit->GetProb() << endl;
+    double df_20C = dfT_fit->Eval(20);
+    double df_20C_err = df_20C * sqrt(pow(dfT_fit->GetParError(0)/dfT_fit->GetParameter(0), 2) + pow(dfT_fit->GetParError(1)*20, 2));
+
+    cout << "Damage factor at 20 C: (" << dfT_fit->Eval(20) << " +/- " << df_20C_err << ") * 10^{-18} A/(n_{eq}*cm)" << endl;
+
+    TGraphErrors *point20C = new TGraphErrors(1, new double[1]{20}, new double[1]{df_20C}, new double[1]{0}, new double[1]{df_20C_err});
+    point20C->SetMarkerStyle(21);
+    point20C->SetMarkerSize(1);
+    point20C->SetMarkerColor(kRed);
+    point20C->Draw("P same");
+   
 }
 
 int find_100V(const vector<double>& V)
