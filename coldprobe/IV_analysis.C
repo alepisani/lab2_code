@@ -17,13 +17,24 @@
 
 using namespace std;
 
+
+/*
+    Incertezze mancanti:
+    - Valutare se 0.3C ci sta come incertezza sulla temperatura
+    - Manca incertezza sulla tensione
+    - Manca incertezza sulla corrente (nominale)
+    - Manca incertezza sulla corrente dovuta all'incertezza sulla temperatura (ogni grado fa circa 10% di incertezza)
+
+    Potremmo mettere 0.5 gradi per valutare il fatto che misuriamo la temperatura del backplane e non del pad, e il corrispondente 5% di incertezza relativa sulla corrente
+*/
+
 #define Kb 8.617333262145e-5 // eV/K
 
 int find_100V(const vector<double>&);
 
 void IV_analysis()
 {
-    double err_temperature = 0.3;
+    double err_temperature = 0.5;
 
     double pixel_volume = 0.13 * 0.13 * 0.003; // cm^3
 
