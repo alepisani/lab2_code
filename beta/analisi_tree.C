@@ -20,7 +20,7 @@ using namespace std;
 
 void analisi_tree()
 {
-    double pmax_thr = 14;
+    double pmax_thr = 12;
 
 
     gStyle->SetOptStat(0);
@@ -30,24 +30,25 @@ void analisi_tree()
     int nBins_pmax = 801;
     double binmax_pmax = 200.5;
 
-    string inputFolder = "HPK/Batch2/Run18_PRE_HPK_QC-TS_W82_S5_LGAD-B_1e15/";
-    string inputName   = "stats_Sr_Run18_Ch0-" + to_string(biasVoltage) + "V_trig2750V.root";
+    string inputFolder = "FBK/Run4_PRE_LF-FBK_QC-TS_W16_S52_LGAD-B/";
+    string inputName   = "stats_Sr_Run4_Ch0-" + to_string(biasVoltage) + "V_trig2750V.root";
 
     TFile *inputFile = new TFile(("Misure/" + inputFolder + inputName).c_str(), "READ");
     TTree *tree = (TTree*)inputFile->Get("Analysis");
     
-    vector<float> *tree_pmax=nullptr, *tree_tmax=nullptr, *tree_area_new=nullptr, *tree_dvdt=nullptr;
+    vector<float> *tree_pmax=nullptr, *tree_tmax=nullptr, *tree_area_new=nullptr, *tree_dvdt=nullptr, *tree_rms=nullptr;
     vector<vector<float>> *tree_cfd=nullptr;
     tree->SetBranchAddress("pmax", &tree_pmax);
     tree->SetBranchAddress("tmax", &tree_tmax);
     tree->SetBranchAddress("area_new", &tree_area_new);
     tree->SetBranchAddress("dvdt", &tree_dvdt);
+    tree->SetBranchAddress("rms", &tree_rms);
     tree->SetBranchAddress("cfd", &tree_cfd);
 
     TH1F *h_pmax = new TH1F("h_pmax", "Distribuzione dell'ampiezza massima;Ampiezza [mV];Conteggi", nBins_pmax, -0.5, binmax_pmax);
     TH1F *h_tmax = new TH1F("h_tmax", "Tempo del massimo del segnale;t_{max} [ns];Conteggi", 101, -1, 4);
 
-    vector<float> pmax, tmax, area_new, dvdt, cfd20_DUT, cfd70_DUT, cfd80_DUT, cfd20_MCP;
+    vector<float> pmax, tmax, area_new, dvdt, cfd20_DUT, cfd70_DUT, cfd80_DUT, cfd20_MCP, rms;
 
     for(int i=0; i<tree->GetEntries(); i++)
     {
@@ -56,6 +57,7 @@ void analisi_tree()
         h_tmax->Fill((*tree_tmax)[0]);
         pmax.push_back((*tree_pmax)[0]);
         tmax.push_back((*tree_tmax)[0]);
+        rms.push_back((*tree_rms)[0]);
         area_new.push_back((*tree_area_new)[0]);
         dvdt.push_back((*tree_dvdt)[0]);
         cfd20_DUT.push_back((*tree_cfd)[0][1]);
@@ -95,7 +97,7 @@ void analisi_tree()
     double tmean = fit_tmax->GetParameter(1);
     double tsigma = fit_tmax->GetParameter(2);
 
-    vector<float> pmax_tclean, tmax_tclean, area_new_tclean, dvdt_tclean, cfd20_DUT_tclean, cfd70_DUT_tclean, cfd80_DUT_tclean, cfd20_MCP_tclean;
+    vector<float> pmax_tclean, tmax_tclean, area_new_tclean, dvdt_tclean, cfd20_DUT_tclean, cfd70_DUT_tclean, cfd80_DUT_tclean, cfd20_MCP_tclean, rms_tclean;
     for(int i=0; i<pmax.size(); i++)
     {
         if((TIME_CUT && tmax[i]>tmean-Nsigma*tsigma && tmax[i]<tmean+Nsigma*tsigma) || !TIME_CUT)
@@ -108,6 +110,7 @@ void analisi_tree()
             cfd70_DUT_tclean.push_back(cfd70_DUT[i]);
             cfd80_DUT_tclean.push_back(cfd80_DUT[i]);
             cfd20_MCP_tclean.push_back(cfd20_MCP[i]);
+            rms_tclean.push_back(rms[i]);
         }
     }
     TH1F *h_pmax_tclean = new TH1F("h_pmax_tclean", "Distribuzione dell'ampiezza massima;Ampiezza [mV];Conteggi", nBins_pmax, -0.5, binmax_pmax);
@@ -131,7 +134,7 @@ void analisi_tree()
     h_tmax_tclean->SetFillColor(kAzure+7);
     h_tmax_tclean->Draw("SAME");
 
-    vector<float> pmax_clean, tmax_clean, area_new_clean, dvdt_clean, cfd20_DUT_clean, cfd70_DUT_clean, cfd80_DUT_clean, cfd20_MCP_clean;
+    vector<float> pmax_clean, tmax_clean, area_new_clean, dvdt_clean, cfd20_DUT_clean, cfd70_DUT_clean, cfd80_DUT_clean, cfd20_MCP_clean, rms_clean;
     for(int i=0; i<pmax_tclean.size(); i++)
     {
         if(pmax_tclean[i]>pmax_thr)
@@ -144,6 +147,7 @@ void analisi_tree()
             cfd70_DUT_clean.push_back(cfd70_DUT_tclean[i]);
             cfd80_DUT_clean.push_back(cfd80_DUT_tclean[i]);
             cfd20_MCP_clean.push_back(cfd20_MCP_tclean[i]);
+            rms_clean.push_back(rms_tclean[i]);
         }
     }
     TH1F *h_pmax_clean = new TH1F("h_pmax_clean", "Distribuzione dell'ampiezza massima;Ampiezza [mV];Conteggi", nBins_pmax, -0.5, binmax_pmax);
@@ -180,8 +184,9 @@ void analisi_tree()
     TFile *outputFile = new TFile(("Misure_clean/" + inputFolder + inputName).c_str(), "RECREATE");
     TTree *outputTree = new TTree("Analysis", "Analysis");
 
-    double out_pmax_clean, out_tmax_clean, out_area_new_clean, out_dvdt_clean, out_cfd20_DUT_clean, out_cfd70_DUT_clean, out_cfd80_DUT_clean, out_cfd20_MCP_clean;
+    double out_pmax_clean, out_tmax_clean, out_area_new_clean, out_dvdt_clean, out_cfd20_DUT_clean, out_cfd70_DUT_clean, out_cfd80_DUT_clean, out_cfd20_MCP_clean, out_rms_clean;
     double out_mutime, out_sigmatime, out_pthr;
+    bool time_cut;
 
     TBranch *b_pmax_clean = outputTree->Branch("pmax", &out_pmax_clean, "pmax_clean/D");
     TBranch *b_tmax_clean = outputTree->Branch("tmax", &out_tmax_clean, "tmax_clean/D");
@@ -191,10 +196,11 @@ void analisi_tree()
     TBranch *b_cfd70_DUT_clean = outputTree->Branch("cfd70_DUT", &out_cfd70_DUT_clean, "cfd70_DUT_clean/D");
     TBranch *b_cfd80_DUT_clean = outputTree->Branch("cfd80_DUT", &out_cfd80_DUT_clean, "cfd80_DUT_clean/D");
     TBranch *b_cfd20_MCP_clean = outputTree->Branch("cfd20_MCP", &out_cfd20_MCP_clean, "cfd20_MCP_clean/D");
-
+    TBranch *b_rms_clean = outputTree->Branch("rms", &out_rms_clean, "rms_clean/D");
     TBranch *b_mutime = outputTree->Branch("mutime", &out_mutime, "mutime/D");
     TBranch *b_sigmatime = outputTree->Branch("sigmatime", &out_sigmatime, "sigmatime/D");
     TBranch *b_pthr = outputTree->Branch("pthr", &out_pthr, "pthr/D");
+    TBranch *b_time_cut = outputTree->Branch("time_cut", &time_cut, "time_cut/O");
 
     for(int i=0; i<pmax_clean.size(); i++)
     {
@@ -206,9 +212,11 @@ void analisi_tree()
         out_cfd70_DUT_clean = cfd70_DUT_clean[i];
         out_cfd80_DUT_clean = cfd80_DUT_clean[i];
         out_cfd20_MCP_clean = cfd20_MCP_clean[i];
+        out_rms_clean = rms_clean[i];
         out_mutime = tmean;
         out_sigmatime = tsigma;
         out_pthr = pmax_thr;
+        time_cut = TIME_CUT;
         outputTree->Fill();
     }
     outputTree->Write();
