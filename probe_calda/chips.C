@@ -2,6 +2,7 @@
 #include <string>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include "TROOT.h"
 #include "TGraphErrors.h"
 #include "TMultiGraph.h"
@@ -11,6 +12,8 @@
 #include "TAxis.h"
 #include "TSystem.h"
 #include "TF1.h"
+#include "TFitResult.h"
+#include "TFitResultPtr.h"
 
 void chips()
 {
@@ -25,15 +28,15 @@ void chips()
 
    // ================= IMPOSTAZIONI =================
    // scegli su quali chip fare l'analisi (true = analizza, false = salta)
-   const bool chip_nogain  = false;
-   const bool chip_LGAD    = false;
-   const bool chip_PiN     = false;
+   const bool chip_nogain  = true;
+   const bool chip_LGAD    = true;
+   const bool chip_PiN     = true;
    const bool chip_EXFLUE  = true;
 
-   const bool fareConfronto = false;   // true = fa i plot di confronto (con i chip attivi sopra)
+   const bool fareConfronto = true;   // true = fa i plot di confronto (con i chip attivi sopra)
    const double Vmax = 40.;           // massimo |V| mostrato in tutti i plot con la tensione
    const bool mostraCanvas = true;    // true = apre anche le finestre, false = salva soltanto i file
-   const bool salva_plots = false;
+   const bool salva_plots = true;
 
    // ---- fit lineari su 1/C^2 - V ----
    const bool fareFit = true;         // true = fa i 3 fit lineari su ogni plot 1/C^2 - V
@@ -57,11 +60,13 @@ void chips()
 
    // fit lineare (y = p0 + p1*x) di un grafico nel range [xmin, xmax]:
    // stampa i risultati nel terminale e restituisce la retta (da disegnare con "same")
-   auto fitLineare = [](TGraphErrors *g, double xmin, double xmax, int col, const char *tag) -> TF1* {
+   std::map<TF1*, double> cov01;   // covarianza tra p0 e p1 di ogni fit (serve per l'errore sull'intersezione)
+   auto fitLineare = [&](TGraphErrors *g, double xmin, double xmax, int col, const char *tag) -> TF1* {
       TF1 *fit = new TF1(Form("fit_%s_%s", g->GetName(), tag), "pol1", xmin, xmax);
       fit->SetLineColor(col);
       fit->SetLineWidth(2);
-      g->Fit(fit, "RNQ");   // R = usa il range della funzione, N = non disegna, Q = silenzioso
+      TFitResultPtr r = g->Fit(fit, "RNQS");   // R = usa il range della funzione, N = non disegna, Q = silenzioso, S = salva il risultato
+      cov01[fit] = r->CovMatrix(0, 1);
       double chi2ndf = (fit->GetNDF() > 0) ? fit->GetChisquare() / fit->GetNDF() : 0.;
       printf("[%s] fit %s  V in [%g, %g]:  p0 = %g +- %g,  p1 = %g +- %g,  chi2/ndf = %g\n",
              g->GetName(), tag, xmin, xmax,
@@ -85,6 +90,28 @@ void chips()
       double relEr = std::sqrt(std::pow(2. * errRelA, 2) + std::pow(eslope / slope, 2));
       printf("[%s] Nb (fit %s) = %.3e +- %.1e cm^-3   (A = %g cm^2)\n",
              chip.c_str(), tag, Nb, Nb * relEr, A);
+   };
+
+   // intersezione tra due rette di fit  y = a + b x :   V* = (a2 - a1) / (b1 - b2)   [V]
+   // errore: propagazione con le covarianze (a_i,b_i) di ciascun fit (i due fit sono indipendenti):
+   //   dV/da1 = -1/D, dV/da2 = 1/D, dV/db1 = -V*/D, dV/db2 = V*/D     con D = b1 - b2
+   //   var(V*) = (sa1^2 + sa2^2)/D^2 + (V*/D)^2 (sb1^2 + sb2^2) + 2 (cov1 + cov2) V*/D^2
+   auto stampaIntersezione = [&](TF1 *f1, TF1 *f2, const std::string &chip, const char *tag) {
+      double a1 = f1->GetParameter(0), b1 = f1->GetParameter(1);
+      double a2 = f2->GetParameter(0), b2 = f2->GetParameter(1);
+      double D  = b1 - b2;
+      if (D == 0.) {
+         printf("[%s] intersezione fit %s: rette parallele, nessuna intersezione\n", chip.c_str(), tag);
+         return;
+      }
+      double Vx  = (a2 - a1) / D;
+      double sa1 = f1->GetParError(0), sb1 = f1->GetParError(1);
+      double sa2 = f2->GetParError(0), sb2 = f2->GetParError(1);
+      double var = (sa1 * sa1 + sa2 * sa2) / (D * D)
+                 + std::pow(Vx / D, 2) * (sb1 * sb1 + sb2 * sb2)
+                 + 2. * (cov01[f1] + cov01[f2]) * Vx / (D * D);
+      double eVx = (var > 0.) ? std::sqrt(var) : 0.;
+      printf("[%s] intersezione fit %s:  V = %.3f +- %.3f V\n", chip.c_str(), tag, Vx, eVx);
    };
 
    // profilo di drogaggio N_B(W) da C - V
@@ -237,6 +264,7 @@ void chips()
          stampaNb(fA, A, name, "A");
          stampaNb(fB, A, name, "B");
          stampaNb(fC, A, name, "C");
+         stampaIntersezione(fB, fC, name, "B-C");
          ci3->cd();
          fA->Draw("same");
          fB->Draw("same");
@@ -357,6 +385,7 @@ void chips()
          stampaNb(fA, A, name, "A");
          stampaNb(fB, A, name, "B");
          stampaNb(fC, A, name, "C");
+         stampaIntersezione(fB, fC, name, "B-C");
          ci3->cd();
          fA->Draw("same");
          fB->Draw("same");
@@ -457,6 +486,7 @@ void chips()
          TF1 *fB = fitLineare(g3, fitB_min, fitB_max, colFitB, "B");
          stampaNb(fA, A, name, "A");
          stampaNb(fB, A, name, "B");
+         stampaIntersezione(fA, fB, name, "A-B");
          ci3->cd();
          fA->Draw("same");
          fB->Draw("same");
@@ -561,6 +591,7 @@ void chips()
          stampaNb(fA, A, name, "A");
          stampaNb(fB, A, name, "B");
          stampaNb(fC, A, name, "C");
+         stampaIntersezione(fB, fC, name, "B-C");
          ci3->cd();
          fA->Draw("same");
          fB->Draw("same");
