@@ -756,6 +756,72 @@ void PlotAllSignals(bool logY = false) {
 }
 
 // =====================================================================
+// ANALISI 8: visualizzazione 3D di UN SINGOLO evento (16 pixel)
+// =====================================================================
+// Evento casuale con cluster size 4 o 5 (16 pixel): vista 3D + mappa 2D numerata
+void PlotEvent3D(Long64_t ev = -1) {
+    if (!LoadData()) return;
+
+    // numero di pixel colpiti (centrali accesi + esterni sopra soglia)
+    auto hit = [](int i, Long64_t e) {
+        return d.px[i].Valid() && (d.px[i].central ? d.px[i].IsOn(e) : d.px[i].Fired(e));
+    };
+    auto csize = [&](Long64_t e) {
+        int n = 0;
+        for (int i = 0; i < NPIX; i++) if (hit(i, e)) n++;
+        return n;
+    };
+
+    // ---- scelta evento: casuale tra quelli con cluster size 4 o 5 ----
+    if (ev < 0) {
+        gRandom->SetSeed(0);                       // diverso a ogni lancio
+        do { ev = (Long64_t)gRandom->Integer(d.nEv); } while (csize(ev) < 4 || csize(ev) > 5);
+    }
+    std::cout << ">>> Sto visualizzando l'evento " << ev
+              << " (cluster size = " << csize(ev) << ")" << std::endl;
+
+    // ---- istogramma ----
+    TH2D *h = new TH2D(Form("h_ev3d_%lld", ev),
+                       Form("Evento %lld (cluster size = %d);Colonna;Riga;Segnale [mV]", ev, csize(ev)),
+                       4, 0, 4, 4, 0, 4);
+    h->SetDirectory(nullptr);
+    gStyle->SetOptStat(0);
+    for (int i = 0; i < NPIX; i++)
+        h->SetBinContent(i % 4 + 1, 4 - i / 4, hit(i, ev) ? d.px[i].Value(ev) : 0.);
+    h->SetMinimum(0.);
+    h->SetFillColor(kAzure + 1);
+    h->GetXaxis()->SetNdivisions(4);
+    h->GetYaxis()->SetNdivisions(4);
+
+    // ---- canvas: 3D a sinistra, mappa 2D a destra ----
+    TCanvas *c = new TCanvas(Form("c_ev3d_%lld", ev), Form("Evento %lld", ev), 1600, 800);
+    c->Divide(2, 1);
+
+    c->cd(1);
+    gPad->SetTheta(25);
+    gPad->SetPhi(-35);
+    h->Draw("LEGO2 FB");
+
+    c->cd(2);
+    gPad->SetRightMargin(0.15);
+    TH2D *h2 = (TH2D*)h->Clone(Form("%s_2d", h->GetName()));
+    h2->SetDirectory(nullptr);
+    h2->SetTitle(Form("Evento %lld: mappa 2D;Colonna;Riga", ev));
+    h2->Draw("COLZ");
+    for (int i = 0; i < NPIX; i++) {
+        TLatex *t = new TLatex(i % 4 + 0.5, 3 - i / 4 + 0.5,
+                               Form("#splitline{Pixel %d}{%.1f}", i, hit(i, ev) ? d.px[i].Value(ev) : 0.));
+        t->SetTextAlign(22);
+        t->SetTextSize(0.03);
+        t->Draw();
+    }
+
+    c->Modified();
+    c->Update();
+    //c->SaveAs(Form("plots/evento3d_%lld.png", ev));
+}
+
+// =====================================================================
 // MACRO PRINCIPALE: esegue tutte le analisi con gli argomenti di default
 // (le singole funzioni si possono richiamare da ROOT anche con altri argomenti)
 // =====================================================================
@@ -777,6 +843,7 @@ void cls_analysis() {
     bool   optDoPerClusterSz   = false;      // segnale 16pixel divisi per cluster size (dei pixel interni)
     bool   optDoOpposite       = false;      // check eventi in cui pixel interni opposti si accendono
     bool   optDoAllSignals     = false;      // segnali dei 16 pixel su tutti gli eventi
+    bool   optEventDisplay     = true;
     
     if (optDoMap16)        PlotMap16();
     if (optDoClusterCount) PlotClusterCount();
@@ -785,4 +852,5 @@ void cls_analysis() {
     if (optDoPerClusterSz) PlotPerClusterSize();
     if (optDoOpposite)     PlotOppositePairs();
     if (optDoAllSignals)   PlotAllSignals();   // true -> asse y logaritmico
+    if (optEventDisplay)   PlotEvent3D();
 }
